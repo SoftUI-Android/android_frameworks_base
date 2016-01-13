@@ -34,7 +34,7 @@
     <dimen name="preference_screen_header_padding_side_material">0dp</dimen>
 
     <!-- Default height of an action bar. -->
-    <dimen name="action_bar_default_height_material">56dp</dimen>
+    <dimen name="action_bar_default_height_material">28dp</dimen>
     <!-- Default padding of an action bar. -->
     <dimen name="action_bar_default_padding_material">4dp</dimen>
     <!-- Default content inset of an action bar. -->
