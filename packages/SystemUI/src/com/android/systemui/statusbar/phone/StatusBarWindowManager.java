@@ -19,30 +19,23 @@ package com.android.systemui.statusbar.phone;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.res.Resources;
-import android.graphics.Point;
 import android.graphics.PixelFormat;
-import android.os.Handler;
 import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.view.Gravity;
-import android.view.Display;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.SurfaceSession;
 import android.view.WindowManager;
-import android.view.WindowManagerPolicy;
 
-import com.android.internal.policy.PolicyManager;
 import com.android.keyguard.R;
 import com.android.systemui.statusbar.BaseStatusBar;
 import com.android.systemui.statusbar.StatusBarState;
-import com.android.systemui.statusbar.policy.KeyguardMonitor;
 
 /**
  * Encapsulates all logic for the status bar window state management.
  */
-public class StatusBarWindowManager implements KeyguardMonitor.Callback {
+public class StatusBarWindowManager {
 
     private final Context mContext;
     private final WindowManager mWindowManager;
@@ -50,56 +43,28 @@ public class StatusBarWindowManager implements KeyguardMonitor.Callback {
     private WindowManager.LayoutParams mLp;
     private WindowManager.LayoutParams mLpChanged;
     private int mBarHeight;
-    private final boolean mKeyguardScreenRotation;
-    private boolean mKeyguardScreenRotationEnabled;
-
-    private boolean mKeyguardBlurEnabled;
-    private boolean mShowingMedia;
-    private final int mStatusBarLayer;
-    private BlurLayer mKeyguardBlur;
-    private final SurfaceSession mFxSession;
-    private final WindowManagerPolicy mPolicy = PolicyManager.makeNewWindowManager();
-
-    private final KeyguardMonitor mKeyguardMonitor;
-
-    private static final int TYPE_LAYER_MULTIPLIER = 10000; // refer to WindowManagerService.TYPE_LAYER_MULTIPLIER
-    private static final int TYPE_LAYER_OFFSET = 1000;      // refer to WindowManagerService.TYPE_LAYER_OFFSET
+    private boolean mKeyguardScreenRotation;
 
     private final State mCurrentState = new State();
 
-    public StatusBarWindowManager(Context context, KeyguardMonitor kgm) {
+    public StatusBarWindowManager(Context context) {
         mContext = context;
         mWindowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         mKeyguardScreenRotation = shouldEnableKeyguardScreenRotation();
-
-        mKeyguardMonitor = kgm;
-        mKeyguardMonitor.addCallback(this);
-
-        mKeyguardBlurEnabled = mContext.getResources().getBoolean(
-                com.android.internal.R.bool.config_ui_blur_enabled);
-        mFxSession = new SurfaceSession();
-        mStatusBarLayer = mPolicy.windowTypeToLayerLw(WindowManager.LayoutParams.TYPE_STATUS_BAR)
-                          * TYPE_LAYER_MULTIPLIER + TYPE_LAYER_OFFSET;
     }
 
     private boolean shouldEnableKeyguardScreenRotation() {
-        final Resources res = mContext.getResources();
-        final boolean configRotation = SystemProperties.getBoolean("lockscreen.rot_override",
-                res.getBoolean(R.bool.config_enableLockScreenRotation));
+        Resources res = mContext.getResources();
+        final boolean configLockRotationValue = res.getBoolean(R.bool.config_enableLockScreenRotation);
+        boolean enableLockScreenRotation = Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.LOCKSCREEN_ROTATION, configLockRotationValue ? 1 : 0, UserHandle.USER_CURRENT) != 0;
 
-        if (configRotation) {
-            mKeyguardScreenRotationEnabled = Settings.System.getIntForUser(
-                    mContext.getContentResolver(), Settings.System.LOCKSCREEN_ROTATION,
-                    1, UserHandle.USER_CURRENT) != 0;
-        }
-
-        return configRotation;
+        return SystemProperties.getBoolean("lockscreen.rot_override",false)
+               || enableLockScreenRotation;
     }
 
-    public void enableKeyguardScreenRotation(boolean keyguardScreenRotationEnabled) {
-        if (mKeyguardScreenRotation) {
-            mKeyguardScreenRotationEnabled = keyguardScreenRotationEnabled;
-        }
+    public void updateKeyguardScreenRotation() {
+        mKeyguardScreenRotation = shouldEnableKeyguardScreenRotation();
     }
 
     /**
@@ -109,6 +74,7 @@ public class StatusBarWindowManager implements KeyguardMonitor.Callback {
      * @param barHeight The height of the status bar in collapsed state.
      */
     public void add(View statusBarView, int barHeight) {
+
         // Now that the status bar window encompasses the sliding panel and its
         // translucent backdrop, the entire thing is made TRANSLUCENT and is
         // hardware-accelerated.
@@ -132,36 +98,21 @@ public class StatusBarWindowManager implements KeyguardMonitor.Callback {
         mWindowManager.addView(mStatusBarView, mLp);
         mLpChanged = new WindowManager.LayoutParams();
         mLpChanged.copyFrom(mLp);
-
-        if (mKeyguardBlurEnabled) {
-            Display display = mWindowManager.getDefaultDisplay();
-            Point xy = new Point();
-            display.getRealSize(xy);
-            mKeyguardBlur = new BlurLayer(mFxSession, xy.x, xy.y, "KeyGuard");
-            if (mKeyguardBlur != null) {
-                mKeyguardBlur.setLayer(mStatusBarLayer -2);
-            }
-        }
     }
 
     private void applyKeyguardFlags(State state) {
         if (state.keyguardShowing) {
+            mLpChanged.flags |= WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER;
             mLpChanged.privateFlags |= WindowManager.LayoutParams.PRIVATE_FLAG_KEYGUARD;
-            if (!mKeyguardBlurEnabled) {
-                mLpChanged.flags |= WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER;
-            }
         } else {
             mLpChanged.flags &= ~WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER;
             mLpChanged.privateFlags &= ~WindowManager.LayoutParams.PRIVATE_FLAG_KEYGUARD;
-            if (mKeyguardBlurEnabled) {
-                mKeyguardBlur.hide();
-            }
         }
     }
 
     private void adjustScreenOrientation(State state) {
         if (state.isKeyguardShowingAndNotOccluded()) {
-            if (mKeyguardScreenRotationEnabled) {
+            if (mKeyguardScreenRotation) {
                 mLpChanged.screenOrientation = ActivityInfo.SCREEN_ORIENTATION_USER;
             } else {
                 mLpChanged.screenOrientation = ActivityInfo.SCREEN_ORIENTATION_NOSENSOR;
@@ -234,33 +185,19 @@ public class StatusBarWindowManager implements KeyguardMonitor.Callback {
         }
     }
 
-    private void applyKeyguardBlurShow(){
-        boolean isblur = false;
-        if (mCurrentState.keyguardShowing && mKeyguardBlurEnabled
-                && !mCurrentState.keyguardOccluded
-                && !mShowingMedia) {
-            isblur = true;
-        }
-        if (mKeyguardBlur != null) {
-            if (isblur) {
-                mKeyguardBlur.show();
-            } else {
-                mKeyguardBlur.hide();
-            }
-        }
-    }
-
     public void setKeyguardShowing(boolean showing) {
+        final boolean oldKeyguardShowing = mCurrentState.keyguardShowing;
         mCurrentState.keyguardShowing = showing;
+        // if the keygurd went from hidden to showing and occluded is true
+        // reset occluded in the same step else we enter an undefined state
+        if (!oldKeyguardShowing && showing && mCurrentState.keyguardOccluded) {
+            mCurrentState.keyguardOccluded = false;
+        }
         apply(mCurrentState);
     }
 
     public void setKeyguardOccluded(boolean occluded) {
-        final boolean oldOccluded = mCurrentState.keyguardOccluded;
         mCurrentState.keyguardOccluded = occluded;
-        if (oldOccluded != occluded) {
-            applyKeyguardBlurShow();
-        }
         apply(mCurrentState);
     }
 
@@ -300,34 +237,12 @@ public class StatusBarWindowManager implements KeyguardMonitor.Callback {
         apply(mCurrentState);
     }
 
-    void setBlur(float b){
-        if (mKeyguardBlurEnabled && mKeyguardBlur != null) {
-            float minBlur = mKeyguardMonitor.isSecure() ? 1.0f : 0.0f;
-            if (b < minBlur) {
-                b = minBlur;
-            } else if (b > 1.0f) {
-                b = 1.0f;
-            }
-            mKeyguardBlur.setBlur(b);
-        }
-    }
-
-    public void setShowingMedia(boolean showingMedia) {
-        mShowingMedia = showingMedia;
-        applyKeyguardBlurShow();
-    }
-
     /**
      * @param state The {@link StatusBarState} of the status bar.
      */
     public void setStatusBarState(int state) {
         mCurrentState.statusBarState = state;
         apply(mCurrentState);
-    }
-
-    @Override
-    public void onKeyguardChanged() {
-        applyKeyguardBlurShow();
     }
 
     private static class State {

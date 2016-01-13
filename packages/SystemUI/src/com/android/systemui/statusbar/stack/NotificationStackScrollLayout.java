@@ -22,7 +22,6 @@ import android.content.res.Configuration;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PointF;
-import android.os.PowerManager;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -203,8 +202,6 @@ public class NotificationStackScrollLayout extends ViewGroup
     private boolean mDisallowScrollingInThisMotion;
     private long mGoToFullShadeDelay;
 
-    private final PowerManager mPm;
-
     private ViewTreeObserver.OnPreDrawListener mChildrenUpdater
             = new ViewTreeObserver.OnPreDrawListener() {
         @Override
@@ -239,8 +236,6 @@ public class NotificationStackScrollLayout extends ViewGroup
                 minHeight, maxHeight);
         mExpandHelper.setEventSource(this);
         mExpandHelper.setScrollAdapter(this);
-
-        mPm = (PowerManager)context.getSystemService(Context.POWER_SERVICE);
 
         mSwipeHelper = new SwipeHelper(SwipeHelper.X, this, getContext());
         mSwipeHelper.setLongPressListener(mLongPressListener);
@@ -346,15 +341,6 @@ public class NotificationStackScrollLayout extends ViewGroup
         clampScrollPosition();
         requestAnimationOnViewResize();
         requestChildrenUpdate();
-    }
-
-    @Override
-    protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
-        if (mChildrenUpdater != null) {
-            getViewTreeObserver().removeOnPreDrawListener(mChildrenUpdater);
-            mChildrenUpdater = null;
-        }
     }
 
     private void requestAnimationOnViewResize() {
@@ -543,7 +529,7 @@ public class NotificationStackScrollLayout extends ViewGroup
         mInterceptDelegateEnabled = interceptDelegateEnabled;
     }
 
-    public void onChildDismissed(View v) {
+    public void onChildDismissed(View v, boolean direction) {
         if (mDismissAllInProgress) {
             return;
         }
@@ -776,11 +762,6 @@ public class NotificationStackScrollLayout extends ViewGroup
                 && !mOnlyScrollingInThisMotion) {
             horizontalSwipeWantsIt = mSwipeHelper.onTouchEvent(ev);
         }
-
-        if (expandWantsIt && mIsBeingDragged) {
-            mPm.cpuBoost(200 * 1000);
-        }
-
         return horizontalSwipeWantsIt || scrollerWantsIt || expandWantsIt || super.onTouchEvent(ev);
     }
 
@@ -1944,7 +1925,6 @@ public class NotificationStackScrollLayout extends ViewGroup
 
             case MotionEvent.ACTION_DOWN: {
                 final int y = (int) ev.getY();
-                mScrolledToTopOnFirstDown = isScrolledToTop();
                 if (getChildAtPosition(ev.getX(), y) == null) {
                     setIsBeingDragged(false);
                     recycleVelocityTracker();
@@ -1958,6 +1938,7 @@ public class NotificationStackScrollLayout extends ViewGroup
                 mLastMotionY = y;
                 mDownX = (int) ev.getX();
                 mActivePointerId = ev.getPointerId(0);
+                mScrolledToTopOnFirstDown = isScrolledToTop();
 
                 initOrResetVelocityTracker();
                 mVelocityTracker.addMovement(ev);

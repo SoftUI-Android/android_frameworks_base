@@ -59,9 +59,7 @@ public class RingtonePlayer extends SystemUI {
         mAudioService = IAudioService.Stub.asInterface(
                 ServiceManager.getService(Context.AUDIO_SERVICE));
         try {
-            if (mAudioService != null) {
-                mAudioService.setRingtonePlayer(mCallback);
-            }
+            mAudioService.setRingtonePlayer(mCallback);
         } catch (RemoteException e) {
             Log.e(TAG, "Problem registering RingtonePlayer: " + e);
         }
@@ -136,18 +134,6 @@ public class RingtonePlayer extends SystemUI {
                 return client.mRingtone.isPlaying();
             } else {
                 return false;
-            }
-        }
-
-        @Override
-        public void setVolume(IBinder token, float volume) {
-            if (LOGD) Log.d(TAG, "setVolume(token=" + token + ", volume=" + volume + ")");
-            Client client;
-            synchronized (mClients) {
-                client = mClients.get(token);
-            }
-            if (client != null) {
-                client.mRingtone.setVolume(volume);
             }
         }
 

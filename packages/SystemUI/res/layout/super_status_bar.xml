@@ -18,11 +18,11 @@
 -->
 
 <!-- This is the combined status bar / notification panel window. -->
-<FrameLayout
+<com.android.systemui.statusbar.phone.StatusBarWindowView
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="false">
+    android:fitsSystemWindows="true">
 
     <com.android.systemui.statusbar.BackDropView
             android:id="@+id/backdrop"
@@ -41,23 +41,10 @@
                    android:visibility="invisible" />
     </com.android.systemui.statusbar.BackDropView>
 
-    <FrameLayout android:id="@+id/scrimview"
-                 android:layout_width="match_parent"
-                 android:layout_height="match_parent"
-                 android:visibility="visible">
-        <com.android.systemui.statusbar.ScrimView
-                android:id="@+id/scrim_behind"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:importantForAccessibility="no"/>
-        <com.android.systemui.statusbar.VisualizerView
-                android:id="@+id/visualizerview"
-                android:gravity="bottom"
-                android:layout_gravity="bottom"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:visibility="visible"/>
-    </FrameLayout>
+    <com.android.systemui.statusbar.ScrimView android:id="@+id/scrim_behind"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no" />
 
     <include layout="@layout/status_bar"
         android:layout_width="match_parent"
@@ -67,8 +54,8 @@
                  android:layout_width="@dimen/notification_panel_width"
                  android:layout_height="wrap_content"
                  android:layout_gravity="@integer/notification_panel_layout_gravity"
-                 android:paddingStart="@dimen/notification_side_padding"
-                 android:paddingEnd="@dimen/notification_side_padding"
+                 android:paddingLeft="@dimen/notification_side_padding"
+                 android:paddingRight="@dimen/notification_side_padding"
                  android:visibility="gone">
         <FrameLayout
                 android:layout_width="match_parent"
@@ -97,4 +84,4 @@
         android:layout_height="match_parent"
         android:importantForAccessibility="no" />
 
-</FrameLayout>
+</com.android.systemui.statusbar.phone.StatusBarWindowView>

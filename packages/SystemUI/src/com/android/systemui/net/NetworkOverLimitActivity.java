@@ -77,9 +77,7 @@ public class NetworkOverLimitActivity extends Activity {
         final INetworkPolicyManager policyService = INetworkPolicyManager.Stub.asInterface(
                 ServiceManager.getService(Context.NETWORK_POLICY_SERVICE));
         try {
-            if (policyService != null) {
-                policyService.snoozeLimit(template);
-            }
+            policyService.snoozeLimit(template);
         } catch (RemoteException e) {
             Log.w(TAG, "problem snoozing network policy", e);
         }

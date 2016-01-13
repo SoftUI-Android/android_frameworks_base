@@ -1,8 +1,6 @@
 package com.android.systemui.volume;
 
 import android.content.Context;
-import android.content.Intent;
-import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.database.ContentObserver;
 import android.media.AudioManager;
@@ -58,12 +56,8 @@ public class VolumeUI extends SystemUI {
     private VolumeController mVolumeController;
     private RemoteVolumeController mRemoteVolumeController;
 
-    private VolumePanel mDialogPanel;
     private VolumePanel mPanel;
     private int mDismissDelay;
-
-    private Configuration mConfiguration;
-    private ZenModeControllerImpl mZenModeController;
 
     @Override
     public void start() {
@@ -78,29 +72,14 @@ public class VolumeUI extends SystemUI {
         putComponent(VolumeComponent.class, mVolumeController);
         updateController();
         mContext.getContentResolver().registerContentObserver(SETTING_URI, false, mObserver);
-        mConfiguration = new Configuration(mContext.getResources().getConfiguration());
     }
 
     @Override
     protected void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-
-        if (isThemeChange(newConfig)) {
-            initPanel();
-        }
-        mConfiguration.setTo(newConfig);
-
         if (mPanel != null) {
             mPanel.onConfigurationChanged(newConfig);
         }
-    }
-
-    private boolean isThemeChange(Configuration newConfig) {
-        if (mConfiguration != null) {
-            int changes = mConfiguration.updateFrom(newConfig);
-            return (changes & ActivityInfo.CONFIG_THEME_RESOURCE) != 0;
-        }
-        return false;
     }
 
     @Override
@@ -124,14 +103,8 @@ public class VolumeUI extends SystemUI {
     }
 
     private void initPanel() {
-        if (mZenModeController == null) {
-            mZenModeController = new ZenModeControllerImpl(mContext, mHandler);
-        }
-        if (mPanel != null) {
-            mPanel.cleanup();
-        }
         mDismissDelay = mContext.getResources().getInteger(R.integer.volume_panel_dismiss_delay);
-        mPanel = new VolumePanel(mContext, mZenModeController);
+        mPanel = new VolumePanel(mContext, new ZenModeControllerImpl(mContext, mHandler));
         mPanel.setCallback(new VolumePanel.Callback() {
             @Override
             public void onZenSettings() {
@@ -154,7 +127,6 @@ public class VolumeUI extends SystemUI {
                 }
             }
         });
-        mDialogPanel = mPanel;
     }
 
     private final ContentObserver mObserver = new ContentObserver(mHandler) {
@@ -170,7 +142,7 @@ public class VolumeUI extends SystemUI {
         public void run() {
             getComponent(PhoneStatusBar.class).startActivityDismissingKeyguard(
                     ZenModePanel.ZEN_SETTINGS, true /* onlyProvisioned */, true /* dismissShade */);
-            mDialogPanel.postDismiss(mDismissDelay);
+            mPanel.postDismiss(mDismissDelay);
         }
     };
 
@@ -211,12 +183,7 @@ public class VolumeUI extends SystemUI {
 
         @Override
         public ZenModeController getZenController() {
-            return mZenModeController;
-        }
-
-        @Override
-        public void setVolumePanel(VolumePanel panel) {
-            mPanel = (panel == null) ? mDialogPanel : panel;
+            return mPanel.getZenController();
         }
 
         @Override

@@ -16,7 +16,6 @@
 
 package com.android.systemui.statusbar.policy;
 
-import android.app.Notification;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -25,7 +24,6 @@ import android.graphics.Outline;
 import android.graphics.Rect;
 import android.os.SystemClock;
 import android.provider.Settings;
-import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -77,8 +75,6 @@ public class HeadsUpNotificationView extends FrameLayout implements SwipeHelper.
     private int mUser;
     private String mMostRecentPackageName;
 
-    private static int sRoundedRectCornerRadius = 0;
-
     public HeadsUpNotificationView(Context context, AttributeSet attrs) {
         this(context, attrs, 0);
     }
@@ -91,8 +87,6 @@ public class HeadsUpNotificationView extends FrameLayout implements SwipeHelper.
         mSnoozedPackages = new ArrayMap<>();
         mDefaultSnoozeLengthMs = resources.getInteger(R.integer.heads_up_default_snooze_length_ms);
         mSnoozeLengthMs = mDefaultSnoozeLengthMs;
-        sRoundedRectCornerRadius = context.getResources().getDimensionPixelSize(
-                R.dimen.notification_material_rounded_rect_radius);
     }
 
     public void updateResources() {
@@ -146,8 +140,7 @@ public class HeadsUpNotificationView extends FrameLayout implements SwipeHelper.
             mHeadsUp.setInterruption();
 
             // 2. Animate mHeadsUpNotificationView in
-            mBar.scheduleHeadsUpOpen(TextUtils.equals(
-                    mHeadsUp.notification.getNotification().category, Notification.CATEGORY_CALL));
+            mBar.scheduleHeadsUpOpen();
 
             // 3. Set alarm to age the notification off
             mBar.resetHeadsUpDecayTimer();
@@ -241,16 +234,14 @@ public class HeadsUpNotificationView extends FrameLayout implements SwipeHelper.
             int outlineTop = view.getPaddingTop();
 
             // Apply padding to shadow.
-            outline.setRoundRect(outlineLeft, outlineTop,
+            outline.setRect(outlineLeft, outlineTop,
                     view.getWidth() - outlineLeft - view.getPaddingRight(),
-                    view.getHeight() - outlineTop - view.getPaddingBottom(),
-                    sRoundedRectCornerRadius);
+                    view.getHeight() - outlineTop - view.getPaddingBottom());
         }
     };
 
     @Override
     public void onAttachedToWindow() {
-        super.onAttachedToWindow();
         final ViewConfiguration viewConfiguration = ViewConfiguration.get(getContext());
         float touchSlop = viewConfiguration.getScaledTouchSlop();
         mSwipeHelper = new SwipeHelper(SwipeHelper.X, this, getContext());
@@ -291,7 +282,6 @@ public class HeadsUpNotificationView extends FrameLayout implements SwipeHelper.
 
     @Override
     protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
         mContext.getContentResolver().unregisterContentObserver(mSettingsObserver);
     }
 
@@ -395,10 +385,9 @@ public class HeadsUpNotificationView extends FrameLayout implements SwipeHelper.
         return 1.0f;
     }
 
-    @Override
-    public void onChildDismissed(View v) {
-        Log.v(TAG, "User swiped heads up to dismiss");
-        mBar.onHeadsUpDismissed();
+    public void onChildDismissed(View v, boolean direction) {
+        if (DEBUG)  Log.v(TAG, "User swiped heads up to dismiss");
+        mBar.onHeadsUpDismissed(direction);
     }
 
     @Override

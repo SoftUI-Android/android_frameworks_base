@@ -18,14 +18,10 @@ package com.android.systemui.statusbar.policy;
 
 import static android.media.MediaRouter.ROUTE_TYPE_REMOTE_DISPLAY;
 
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
-import android.hardware.display.DisplayManager;
 import android.media.MediaRouter;
 import android.media.MediaRouter.RouteInfo;
 import android.media.projection.MediaProjectionInfo;
@@ -69,11 +65,6 @@ public class CastControllerImpl implements CastController {
                 context.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         mProjection = mProjectionManager.getActiveProjectionInfo();
         mProjectionManager.addCallback(mProjectionCallback, new Handler());
-
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(DisplayManager.ACTION_WIFI_DISPLAY_STATUS_CHANGED);
-        context.registerReceiver(mReceiver, filter);
-
         if (DEBUG) Log.d(TAG, "new CastController()");
     }
 
@@ -173,7 +164,7 @@ public class CastControllerImpl implements CastController {
 
     @Override
     public void startCasting(CastDevice device) {
-        if (device == null || !(device.tag instanceof RouteInfo)) return;
+        if (device == null || device.tag == null) return;
         final RouteInfo route = (RouteInfo) device.tag;
         if (DEBUG) Log.d(TAG, "startCasting: " + routeToString(route));
         mMediaRouter.selectRoute(ROUTE_TYPE_REMOTE_DISPLAY, route);
@@ -278,16 +269,6 @@ public class CastControllerImpl implements CastController {
         if (route.isSelected()) sb.append(",selected");
         return sb.append(",id=").append(route.getTag()).toString();
     }
-
-    private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (action.equals(DisplayManager.ACTION_WIFI_DISPLAY_STATUS_CHANGED)) {
-                updateRemoteDisplays();
-            }
-        }
-    };
 
     private final MediaRouter.SimpleCallback mMediaCallback = new MediaRouter.SimpleCallback() {
         @Override

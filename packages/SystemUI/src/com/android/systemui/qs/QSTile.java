@@ -18,9 +18,7 @@ package com.android.systemui.qs;
 
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.graphics.drawable.AnimatedVectorDrawable;
-import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
@@ -30,10 +28,10 @@ import android.util.SparseArray;
 import android.view.View;
 import android.view.ViewGroup;
 
-import android.widget.RemoteViews;
 import com.android.systemui.qs.QSTile.State;
 import com.android.systemui.statusbar.policy.BluetoothController;
 import com.android.systemui.statusbar.policy.CastController;
+import com.android.systemui.statusbar.policy.FlashlightController;
 import com.android.systemui.statusbar.policy.KeyguardMonitor;
 import com.android.systemui.statusbar.policy.Listenable;
 import com.android.systemui.statusbar.policy.LocationController;
@@ -41,8 +39,6 @@ import com.android.systemui.statusbar.policy.NetworkController;
 import com.android.systemui.statusbar.policy.RotationLockController;
 import com.android.systemui.statusbar.policy.HotspotController;
 import com.android.systemui.statusbar.policy.ZenModeController;
-import com.android.systemui.volume.VolumeComponent;
-import cyanogenmod.app.StatusBarPanelCustomTile;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -99,15 +95,10 @@ public abstract class QSTile<TState extends State> implements Listenable {
         Boolean getToggleState();
         View createDetailView(Context context, View convertView, ViewGroup parent);
         Intent getSettingsIntent();
-        StatusBarPanelCustomTile getCustomTile();
         void setToggleState(boolean state);
     }
 
     // safe to call from any thread
-
-    public boolean hasSensitiveData() {
-        return false;
-    }
 
     public void setCallback(Callback callback) {
         mHandler.obtainMessage(H.SET_CALLBACK, callback).sendToTarget();
@@ -259,6 +250,9 @@ public abstract class QSTile<TState extends State> implements Listenable {
                 } else if (msg.what == SECONDARY_CLICK) {
                     name = "handleSecondaryClick";
                     handleSecondaryClick();
+                } else if (msg.what == LONG_CLICK) {
+                    name = "handleLongClick";
+                    handleLongClick();
                 } else if (msg.what == REFRESH_STATE) {
                     name = "handleRefreshState";
                     handleRefreshState(msg.obj);
@@ -300,11 +294,9 @@ public abstract class QSTile<TState extends State> implements Listenable {
     }
 
     public interface Host {
-        void removeCustomTile(StatusBarPanelCustomTile customTile);
         void startSettingsActivity(Intent intent);
         void warn(String message, Throwable t);
         void collapsePanels();
-        RemoteViews.OnClickHandler getOnClickHandler();
         Looper getLooper();
         Context getContext();
         Collection<QSTile<?>> getTiles();
@@ -316,7 +308,7 @@ public abstract class QSTile<TState extends State> implements Listenable {
         ZenModeController getZenModeController();
         HotspotController getHotspotController();
         CastController getCastController();
-        VolumeComponent getVolumeComponent();
+        FlashlightController getFlashlightController();
         KeyguardMonitor getKeyguardMonitor();
 
         public interface Callback {
@@ -367,57 +359,6 @@ public abstract class QSTile<TState extends State> implements Listenable {
         }
     }
 
-    protected class ExternalIcon extends AnimationIcon {
-        private Context mPackageContext;
-        private String mPkg;
-        private int mResId;
-
-        public ExternalIcon(String pkg, int resId) {
-            super(resId);
-            mPkg = pkg;
-            mResId = resId;
-        }
-
-        @Override
-        public Drawable getDrawable(Context context) {
-            // Get the drawable from the package context
-            Drawable d = null;
-            try {
-                d = super.getDrawable(getPackageContext());
-            } catch (Throwable t) {
-                Log.w(TAG, "Error creating package context" + mPkg + " id=" + mResId, t);
-            }
-            return d;
-        }
-
-        private Context getPackageContext() {
-            if (mPackageContext == null) {
-                try {
-                    mPackageContext = mContext.createPackageContext(mPkg, 0);
-                } catch (Throwable t) {
-                    Log.w(TAG, "Error creating package context" + mPkg, t);
-                    return null;
-                }
-            }
-            return mPackageContext;
-        }
-    }
-
-    protected class ExternalBitmapIcon extends Icon {
-        private Bitmap mBitmap;
-
-        public ExternalBitmapIcon(Bitmap bitmap) {
-            mBitmap = bitmap;
-        }
-
-        @Override
-        public Drawable getDrawable(Context context) {
-            // This is gross
-            BitmapDrawable bitmapDrawable = new BitmapDrawable(context.getResources(), mBitmap);
-            return bitmapDrawable;
-        }
-    }
-
     protected class AnimationIcon extends ResourceIcon {
         private boolean mAllowAnimation;
 
@@ -432,14 +373,13 @@ public abstract class QSTile<TState extends State> implements Listenable {
         @Override
         public Drawable getDrawable(Context context) {
             // workaround: get a clean state for every new AVD
-            final Drawable d = super.getDrawable(context).getConstantState().newDrawable();
-            if (d instanceof AnimatedVectorDrawable) {
-                ((AnimatedVectorDrawable)d).start();
-                if (mAllowAnimation) {
-                    mAllowAnimation = false;
-                } else {
-                    ((AnimatedVectorDrawable)d).stop(); // skip directly to end state
-                }
+            final AnimatedVectorDrawable d = (AnimatedVectorDrawable) super.getDrawable(context)
+                    .getConstantState().newDrawable();
+            d.start();
+            if (mAllowAnimation) {
+                mAllowAnimation = false;
+            } else {
+                d.stop(); // skip directly to end state
             }
             return d;
         }
@@ -460,8 +400,6 @@ public abstract class QSTile<TState extends State> implements Listenable {
 
     public static class State {
         public boolean visible;
-        public boolean enabled = true;
-        public int iconId;
         public Icon icon;
         public String label;
         public String contentDescription;
@@ -472,7 +410,6 @@ public abstract class QSTile<TState extends State> implements Listenable {
             if (other == null) throw new IllegalArgumentException();
             if (!other.getClass().equals(getClass())) throw new IllegalArgumentException();
             final boolean changed = other.visible != visible
-                    || !Objects.equals(other.enabled, enabled)
                     || !Objects.equals(other.icon, icon)
                     || !Objects.equals(other.label, label)
                     || !Objects.equals(other.contentDescription, contentDescription)
@@ -480,7 +417,6 @@ public abstract class QSTile<TState extends State> implements Listenable {
                     || !Objects.equals(other.dualLabelContentDescription,
                     dualLabelContentDescription);
             other.visible = visible;
-            other.enabled = enabled;
             other.icon = icon;
             other.label = label;
             other.contentDescription = contentDescription;
@@ -497,7 +433,6 @@ public abstract class QSTile<TState extends State> implements Listenable {
         protected StringBuilder toStringBuilder() {
             final StringBuilder sb = new StringBuilder(getClass().getSimpleName()).append('[');
             sb.append("visible=").append(visible);
-            sb.append(",enabled=").append(enabled);
             sb.append(",icon=").append(icon);
             sb.append(",label=").append(label);
             sb.append(",contentDescription=").append(contentDescription);

@@ -114,7 +114,7 @@ public class MobileDataControllerImpl implements NetworkController.MobileDataCon
             return warn("no stats session");
         }
         NetworkTemplate template = NetworkTemplate.buildTemplateMobileAll(subscriberId);
-        template = NetworkTemplate.normalize(template, null); // XXX mTelephonyManager.getMergedSubscriberIds());
+        template = NetworkTemplate.normalize(template, mTelephonyManager.getMergedSubscriberIds());
 
         final NetworkPolicy policy = findNetworkPolicy(template);
         try {
@@ -162,7 +162,7 @@ public class MobileDataControllerImpl implements NetworkController.MobileDataCon
                 usage.warningLevel = DEFAULT_WARNING_LEVEL;
             }
             if (usage != null) {
-                usage.carrier = mNetworkController.getMobileNetworkName();
+                usage.carrier = mNetworkController.getMobileDataNetworkName();
             }
             return usage;
         } catch (RemoteException e) {

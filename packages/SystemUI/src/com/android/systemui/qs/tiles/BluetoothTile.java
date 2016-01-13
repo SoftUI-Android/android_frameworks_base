@@ -23,19 +23,13 @@ import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
 
-import android.widget.AdapterView;
-import android.widget.ListView;
 import com.android.systemui.R;
 import com.android.systemui.qs.QSDetailItems;
 import com.android.systemui.qs.QSDetailItems.Item;
-import com.android.systemui.qs.QSDetailItemsList;
 import com.android.systemui.qs.QSTile;
 import com.android.systemui.statusbar.policy.BluetoothController;
 import com.android.systemui.statusbar.policy.BluetoothController.PairedDevice;
-import cyanogenmod.app.StatusBarPanelCustomTile;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 
 /** Quick settings tile: Bluetooth **/
@@ -52,7 +46,7 @@ public class BluetoothTile extends QSTile<QSTile.BooleanState>  {
     }
 
     @Override
-    public boolean hasSensitiveData() {
+    public boolean supportsDualTargets() {
         return true;
     }
 
@@ -77,10 +71,8 @@ public class BluetoothTile extends QSTile<QSTile.BooleanState>  {
 
     @Override
     protected void handleClick() {
-        if (!isRadioProhibited()) {
-            final boolean isEnabled = (Boolean)mState.value;
-            mController.setBluetoothEnabled(!isEnabled);
-        }
+        final boolean isEnabled = (Boolean)mState.value;
+        mController.setBluetoothEnabled(!isEnabled);
     }
 
     @Override
@@ -150,14 +142,6 @@ public class BluetoothTile extends QSTile<QSTile.BooleanState>  {
         }
     }
 
-    public boolean isRadioProhibited() {
-        boolean airModeOn = (android.provider.Settings.System.getInt(
-                mContext.getContentResolver(),
-                android.provider.Settings.System.AIRPLANE_MODE_ON, 0) != 0);
-        boolean disable = mContext.getResources().getBoolean(R.bool.config_disableWifiAndBluetooth);
-        return disable && airModeOn;
-    }
-
     private final BluetoothController.Callback mCallback = new BluetoothController.Callback() {
         @Override
         public void onBluetoothStateChange(boolean enabled, boolean connecting) {
@@ -175,11 +159,8 @@ public class BluetoothTile extends QSTile<QSTile.BooleanState>  {
         }
     };
 
-    private final class BluetoothDetailAdapter implements DetailAdapter,
-            QSDetailItems.Callback, AdapterView.OnItemClickListener {
-        private QSDetailItemsList mItemsList;
-        private QSDetailItemsList.QSDetailListAdapter mAdapter;
-        private List<Item> mBluetoothItems = new ArrayList<>();
+    private final class BluetoothDetailAdapter implements DetailAdapter, QSDetailItems.Callback {
+        private QSDetailItems mItems;
 
         @Override
         public int getTitle() {
@@ -197,48 +178,35 @@ public class BluetoothTile extends QSTile<QSTile.BooleanState>  {
         }
 
         @Override
-        public StatusBarPanelCustomTile getCustomTile() {
-            return null;
-        }
-
-        @Override
         public void setToggleState(boolean state) {
             mController.setBluetoothEnabled(state);
-            fireToggleStateChanged(state);
-            setItemsVisible(state);
+            showDetail(false);
         }
 
         @Override
         public View createDetailView(Context context, View convertView, ViewGroup parent) {
-            mItemsList = QSDetailItemsList.convertOrInflate(context, convertView, parent);
-            ListView listView = mItemsList.getListView();
-            listView.setDivider(null);
-            listView.setOnItemClickListener(this);
-            listView.setAdapter(mAdapter =
-                    new QSDetailItemsList.QSDetailListAdapter(context, mBluetoothItems));
-            mAdapter.setCallback(this);
-            mItemsList.setEmptyState(R.drawable.ic_qs_bluetooth_detail_empty,
+            mItems = QSDetailItems.convertOrInflate(context, convertView, parent);
+            mItems.setTagSuffix("Bluetooth");
+            mItems.setEmptyState(R.drawable.ic_qs_bluetooth_detail_empty,
                     R.string.quick_settings_bluetooth_detail_empty_text);
-
+            mItems.setCallback(this);
+            mItems.setMinHeightInItems(0);
             updateItems();
-            return mItemsList;
+            setItemsVisible(mState.value);
+            return mItems;
         }
 
         public void setItemsVisible(boolean visible) {
-            if (mAdapter == null) return;
-            if (visible) {
-                updateItems();
-            } else {
-                mBluetoothItems.clear();
-            }
-            mAdapter.notifyDataSetChanged();
+            if (mItems == null) return;
+            mItems.setItemsVisible(visible);
         }
 
         private void updateItems() {
-            if (mAdapter == null) return;
+            if (mItems == null) return;
+            Item[] items = null;
             final Set<PairedDevice> devices = mController.getPairedDevices();
             if (devices != null) {
-                mBluetoothItems.clear();
+                items = new Item[devices.size()];
                 int i = 0;
                 for (PairedDevice device : devices) {
                     final Item item = new Item();
@@ -253,15 +221,19 @@ public class BluetoothTile extends QSTile<QSTile.BooleanState>  {
                         item.line2 = mContext.getString(R.string.quick_settings_connecting);
                     }
                     item.tag = device;
-                    mBluetoothItems.add(item);
+                    items[i++] = item;
                 }
             }
-            mAdapter.notifyDataSetChanged();
+            mItems.setItems(items);
         }
 
         @Override
         public void onDetailItemClick(Item item) {
-            // noop
+            if (item == null || item.tag == null) return;
+            final PairedDevice device = (PairedDevice) item.tag;
+            if (device != null && device.state == PairedDevice.STATE_DISCONNECTED) {
+                mController.connect(device);
+            }
         }
 
         @Override
@@ -270,16 +242,6 @@ public class BluetoothTile extends QSTile<QSTile.BooleanState>  {
             final PairedDevice device = (PairedDevice) item.tag;
             if (device != null) {
                 mController.disconnect(device);
-            }
-        }
-
-        @Override
-        public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-            Item item = (Item) parent.getItemAtPosition(position);
-            if (item == null || item.tag == null) return;
-            final PairedDevice device = (PairedDevice) item.tag;
-            if (device != null && device.state == PairedDevice.STATE_DISCONNECTED) {
-                mController.connect(device);
             }
         }
     }

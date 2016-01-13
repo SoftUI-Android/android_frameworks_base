@@ -12,10 +12,11 @@ import android.database.ContentObserver;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.TrafficStats;
+import android.net.Uri;
 import android.os.Handler;
+import android.os.UserHandle;
 import android.os.Message;
 import android.os.SystemClock;
-import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.AttributeSet;
 import android.util.TypedValue;
@@ -24,11 +25,17 @@ import android.widget.TextView;
 
 import com.android.systemui.R;
 
+/*
+*
+* Seeing how an Integer object in java requires at least 16 Bytes, it seemed awfully wasteful
+* to only use it for a single boolean. 32-bits is plenty of room for what we need it to do.
+*
+*/
 public class NetworkTraffic extends TextView {
-    public static final int MASK_UP = 0x00000001;
-    public static final int MASK_DOWN = 0x00000002;
-    public static final int MASK_UNIT = 0x00000004;
-    public static final int MASK_PERIOD = 0xFFFF0000;
+    public static final int MASK_UP = 0x00000001;        // Least valuable bit
+    public static final int MASK_DOWN = 0x00000002;      // Second least valuable bit
+    public static final int MASK_UNIT = 0x00000004;      // Third least valuable bit
+    public static final int MASK_PERIOD = 0xFFFF0000;    // Most valuable 16 bits
 
     private static final int KILOBIT = 1000;
     private static final int KILOBYTE = 1024;
@@ -39,31 +46,37 @@ public class NetworkTraffic extends TextView {
         decimalFormat.setMaximumFractionDigits(1);
     }
 
+    private int mState = 0;
     private boolean mAttached;
-    private boolean mAutoHide;
-
+    private long totalRxBytes;
+    private long totalTxBytes;
+    private long lastUpdateTime;
+    private int txtSizeSingle;
+    private int txtSizeMulti;
     private int KB = KILOBIT;
     private int MB = KB * KB;
     private int GB = MB * KB;
+    private boolean mAutoHide;
     private int mAutoHideThreshold;
-    private int mState = 0;
-    private int txtSizeMulti;
-    private int txtSizeSingle;
-
-    private long lastUpdateTime;
-    private long totalRxBytes;
-    private long totalTxBytes;
 
     private Handler mTrafficHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
             long timeDelta = SystemClock.elapsedRealtime() - lastUpdateTime;
+
             if (timeDelta < getInterval(mState) * .95) {
-                if (msg.what != 1) return;
-                if (timeDelta < 1) timeDelta = Long.MAX_VALUE;
+                if (msg.what != 1) {
+                    // we just updated the view, nothing further to do
+                    return;
+                }
+                if (timeDelta < 1) {
+                    // Can't div by 0 so make sure the value displayed is minimal
+                    timeDelta = Long.MAX_VALUE;
+                }
             }
             lastUpdateTime = SystemClock.elapsedRealtime();
 
+            // Calculate the data rate from the change in total bytes and time
             long newTotalRxBytes = TrafficStats.getTotalRxBytes();
             long newTotalTxBytes = TrafficStats.getTotalTxBytes();
             long rxData = newTotalRxBytes - totalRxBytes;
@@ -73,6 +86,7 @@ public class NetworkTraffic extends TextView {
                 setText("");
                 setVisibility(View.GONE);
             } else {
+                // If bit/s convert from Bytes to bits
                 String symbol;
                 if (KB == KILOBYTE) {
                     symbol = "B/s";
@@ -82,9 +96,13 @@ public class NetworkTraffic extends TextView {
                     txData = txData * 8;
                 }
 
+                // Get information for uplink ready so the line return can be added
                 String output = "";
-                if (isSet(mState, MASK_UP)) output = formatOutput(timeDelta, txData, symbol);
+                if (isSet(mState, MASK_UP)) {
+                    output = formatOutput(timeDelta, txData, symbol);
+                }
 
+                // Ensure text size is where it needs to be
                 int textSize;
                 if (isSet(mState, MASK_UP + MASK_DOWN)) {
                     output += "\n";
@@ -93,15 +111,20 @@ public class NetworkTraffic extends TextView {
                     textSize = txtSizeSingle;
                 }
 
-                if (isSet(mState, MASK_DOWN)) output += formatOutput(timeDelta, rxData, symbol);
+                // Add information for downlink if it's called for
+                if (isSet(mState, MASK_DOWN)) {
+                    output += formatOutput(timeDelta, rxData, symbol);
+                }
 
-                if (!output.contentEquals(getText())) {
+                // Update view if there's anything new to show
+                if (! output.contentEquals(getText())) {
                     setTextSize(TypedValue.COMPLEX_UNIT_PX, (float)textSize);
                     setText(output);
                 }
                 setVisibility(View.VISIBLE);
             }
 
+            // Post delayed message to refresh in ~1000ms
             totalRxBytes = newTotalRxBytes;
             totalTxBytes = newTotalTxBytes;
             clearHandlerCallbacks();
@@ -110,9 +133,13 @@ public class NetworkTraffic extends TextView {
 
         private String formatOutput(long timeDelta, long data, String symbol) {
             long speed = (long)(data / (timeDelta / 1000F));
-            if (speed < KB) return decimalFormat.format(speed) + symbol;
-            else if (speed < MB) return decimalFormat.format(speed / (float)KB) + 'k' + symbol;
-            else if (speed < GB) return decimalFormat.format(speed / (float)MB) + 'M' + symbol;
+            if (speed < KB) {
+                return decimalFormat.format(speed) + symbol;
+            } else if (speed < MB) {
+                return decimalFormat.format(speed / (float)KB) + 'k' + symbol;
+            } else if (speed < GB) {
+                return decimalFormat.format(speed / (float)MB) + 'M' + symbol;
+            }
             return decimalFormat.format(speed / (float)GB) + 'G' + symbol;
         }
 
@@ -120,12 +147,12 @@ public class NetworkTraffic extends TextView {
             long speedTxKB = (long)(txData / (timeDelta / 1000f)) / KILOBYTE;
             long speedRxKB = (long)(rxData / (timeDelta / 1000f)) / KILOBYTE;
             int mState = 2;
-            return mAutoHide &&
+                return mAutoHide &&
                    (mState == MASK_DOWN && speedRxKB <= mAutoHideThreshold ||
                     mState == MASK_UP && speedTxKB <= mAutoHideThreshold ||
                     mState == MASK_UP + MASK_DOWN &&
-                    speedRxKB <= mAutoHideThreshold &&
-                    speedTxKB <= mAutoHideThreshold);
+                       speedRxKB <= mAutoHideThreshold &&
+                       speedTxKB <= mAutoHideThreshold);
         }
     };
 
@@ -143,16 +170,22 @@ public class NetworkTraffic extends TextView {
 
         void observe() {
             ContentResolver resolver = mContext.getContentResolver();
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.NETWORK_TRAFFIC_STATE), false, this, UserHandle.USER_ALL);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.NETWORK_TRAFFIC_AUTOHIDE), false, this, UserHandle.USER_ALL);
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.NETWORK_TRAFFIC_AUTOHIDE_THRESHOLD), false, this, UserHandle.USER_ALL);
+            Uri uri = Settings.System.getUriFor(Settings.System.NETWORK_TRAFFIC_STATE);
+            resolver.registerContentObserver(uri, false,
+                    this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System
+                    .getUriFor(Settings.System.NETWORK_TRAFFIC_AUTOHIDE), false,
+                    this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System
+                    .getUriFor(Settings.System.NETWORK_TRAFFIC_AUTOHIDE_THRESHOLD), false,
+                    this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System
+                    .getUriFor(Settings.System.NETWORK_TRAFFIC_COLOR), false,
+                    this, UserHandle.USER_ALL);
         }
 
-        /**
-         * @hide
+        /*
+         *  @hide
          */
         @Override
         public void onChange(boolean selfChange) {
@@ -160,22 +193,22 @@ public class NetworkTraffic extends TextView {
         }
     }
 
-    /**
-     * @hide
+    /*
+     *  @hide
      */
     public NetworkTraffic(Context context) {
         this(context, null);
     }
 
-    /**
-     * @hide
+    /*
+     *  @hide
      */
     public NetworkTraffic(Context context, AttributeSet attrs) {
         this(context, attrs, 0);
     }
 
-    /**
-     * @hide
+    /*
+     *  @hide
      */
     public NetworkTraffic(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
@@ -213,7 +246,9 @@ public class NetworkTraffic extends TextView {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if (action != null && action.equals(ConnectivityManager.CONNECTIVITY_ACTION)) updateSettings();
+            if (action != null && action.equals(ConnectivityManager.CONNECTIVITY_ACTION)) {
+                updateSettings();
+            }
         }
     };
 
@@ -224,21 +259,38 @@ public class NetworkTraffic extends TextView {
         return network != null && network.isConnected();
     }
 
-    private void updateSettings() {
+    public void updateSettings() {
         ContentResolver resolver = mContext.getContentResolver();
 
         mAutoHide = Settings.System.getIntForUser(resolver,
-                Settings.System.NETWORK_TRAFFIC_AUTOHIDE, 0, UserHandle.USER_CURRENT) == 1;
+                Settings.System.NETWORK_TRAFFIC_AUTOHIDE, 0,
+                UserHandle.USER_CURRENT) == 1;
 
         mAutoHideThreshold = Settings.System.getIntForUser(resolver,
-                Settings.System.NETWORK_TRAFFIC_AUTOHIDE_THRESHOLD, 10, UserHandle.USER_CURRENT);
+                Settings.System.NETWORK_TRAFFIC_AUTOHIDE_THRESHOLD, 10,
+                UserHandle.USER_CURRENT);
 
-        mState = Settings.System.getIntForUser(resolver,
-                Settings.System.NETWORK_TRAFFIC_STATE, 0, UserHandle.USER_CURRENT);
+        mState = Settings.System.getIntForUser(resolver, Settings.System.NETWORK_TRAFFIC_STATE, 0,
+                UserHandle.USER_CURRENT);
 
-        if (isSet(mState, MASK_UNIT)) KB = KILOBYTE;
-        else KB = KILOBIT;
+	int defaultColor = Settings.System.getIntForUser(resolver,
+                Settings.System.NETWORK_TRAFFIC_COLOR, 0xFFFFFFFF, UserHandle.USER_CURRENT);
 
+	int mNetworkTrafficColor = Settings.System.getIntForUser(resolver,
+                Settings.System.NETWORK_TRAFFIC_COLOR, -2, UserHandle.USER_CURRENT);
+
+	if (mNetworkTrafficColor == Integer.MIN_VALUE
+                || mNetworkTrafficColor == -2) {
+            mNetworkTrafficColor = defaultColor;
+        }
+
+	setTextColor(mNetworkTrafficColor);
+
+        if (isSet(mState, MASK_UNIT)) {
+            KB = KILOBYTE;
+        } else {
+            KB = KILOBIT;
+        }
         MB = KB * KB;
         GB = MB * KB;
 
@@ -276,10 +328,15 @@ public class NetworkTraffic extends TextView {
 
     private void updateTrafficDrawable() {
         int intTrafficDrawable;
-        if (isSet(mState, MASK_UP + MASK_DOWN)) intTrafficDrawable = R.drawable.stat_sys_network_traffic_updown;
-        else if (isSet(mState, MASK_UP)) intTrafficDrawable = R.drawable.stat_sys_network_traffic_up;
-        else if (isSet(mState, MASK_DOWN)) intTrafficDrawable = R.drawable.stat_sys_network_traffic_down;
-        else intTrafficDrawable = 0;
+        if (isSet(mState, MASK_UP + MASK_DOWN)) {
+            intTrafficDrawable = R.drawable.stat_sys_network_traffic_updown;
+        } else if (isSet(mState, MASK_UP)) {
+            intTrafficDrawable = R.drawable.stat_sys_network_traffic_up;
+        } else if (isSet(mState, MASK_DOWN)) {
+            intTrafficDrawable = R.drawable.stat_sys_network_traffic_down;
+        } else {
+            intTrafficDrawable = 0;
+        }
         setCompoundDrawablesWithIntrinsicBounds(0, 0, intTrafficDrawable, 0);
     }
 }

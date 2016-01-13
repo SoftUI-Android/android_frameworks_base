@@ -45,7 +45,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
     private boolean mShowingPublic;
     private boolean mSensitive;
     private boolean mShowingPublicInitialized;
-    protected boolean mShowingPublicForIntrinsicHeight;
+    private boolean mShowingPublicForIntrinsicHeight;
 
     /**
      * Is this notification expanded by the system. The expansion state can be overridden by the
@@ -58,15 +58,15 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
      */
     private boolean mExpansionDisabled;
 
-    protected NotificationContentView mPublicLayout;
-    protected NotificationContentView mPrivateLayout;
-    protected int mMaxExpandHeight;
-    protected boolean mWasReset;
-    protected NotificationGuts mGuts;
+    private NotificationContentView mPublicLayout;
+    private NotificationContentView mPrivateLayout;
+    private int mMaxExpandHeight;
     private View mVetoButton;
     private boolean mClearable;
     private ExpansionLogger mLogger;
     private String mLoggingKey;
+    private boolean mWasReset;
+    private NotificationGuts mGuts;
 
     private StatusBarNotification mStatusBarNotification;
     private boolean mIsHeadsUp;
@@ -146,7 +146,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
         mRowMinHeight = 0;
         final boolean wasExpanded = isExpanded();
         mRowMaxHeight = 0;
-        setExpandable(false);
+        mExpandable = false;
         mHasUserChangedExpansion = false;
         mUserLocked = false;
         mShowingPublic = false;
@@ -226,7 +226,6 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
 
     public void setExpandable(boolean expandable) {
         mExpandable = expandable;
-        setClipToOutline(expandable);
     }
 
     /**
@@ -342,7 +341,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
      *
      * @return whether the view state is currently expanded.
      */
-    protected boolean isExpanded() {
+    private boolean isExpanded() {
         return !mExpansionDisabled
                 && (!hasUserChangedExpansion() && isSystemExpanded() || isUserExpanded());
     }
@@ -358,7 +357,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
         mWasReset = false;
     }
 
-    protected void updateMaxExpandHeight() {
+    private void updateMaxExpandHeight() {
         int intrinsicBefore = getIntrinsicHeight();
         mMaxExpandHeight = mPrivateLayout.getMaxHeight();
         if (intrinsicBefore != getIntrinsicHeight()) {

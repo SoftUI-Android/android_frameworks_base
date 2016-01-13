@@ -30,13 +30,12 @@ import com.android.systemui.qs.QSTile;
 
 /** Quick settings tile: Airplane mode **/
 public class AirplaneModeTile extends QSTile<QSTile.BooleanState> {
+    private static final Intent WIRELESS_SETTINGS = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
+
     private final AnimationIcon mEnable =
             new AnimationIcon(R.drawable.ic_signal_airplane_enable_animation);
     private final AnimationIcon mDisable =
             new AnimationIcon(R.drawable.ic_signal_airplane_disable_animation);
-
-    private static final Intent WIRELESS_SETTINGS = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
-
     private final GlobalSetting mSetting;
 
     private boolean mListening;
@@ -50,11 +49,6 @@ public class AirplaneModeTile extends QSTile<QSTile.BooleanState> {
                 handleRefreshState(value);
             }
         };
-    }
-
-    @Override
-    public boolean hasSensitiveData() {
-        return true;
     }
 
     @Override

@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
- * Not a Contribution.
- *
  * Copyright (C) 2008 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -108,21 +105,11 @@ public class DateView extends TextView {
         }
 
         mCurrentTime.setTime(System.currentTimeMillis());
-        final String text = getDateFormat();
+
+        final String text = mDateFormat.format(mCurrentTime);
         if (!text.equals(mLastText)) {
             setText(text);
             mLastText = text;
-        }
-        Intent intent = new Intent("android.set.drm_file_as_media");
-        mContext.sendBroadcast(intent);
-    }
-
-    private String getDateFormat() {
-        if (getContext().getResources().getBoolean(
-                com.android.internal.R.bool.def_custom_dateformat)) {
-            return DateFormat.getDateFormat(getContext()).format(mCurrentTime);
-        } else {
-            return mDateFormat.format(mCurrentTime);
         }
     }
 }
