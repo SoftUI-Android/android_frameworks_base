@@ -24,9 +24,9 @@
             android:fillEnabled="true"
             android:fillBefore="false" android:fillAfter="true"
             android:startOffset="100"
-            android:duration="150"/>
+            android:duration="0"/>
     <translate android:fromYDelta="0%" android:toYDelta="8%"
             android:fillEnabled="true" android:fillBefore="true" android:fillAfter="true"
             android:interpolator="@interpolator/accelerate_quart"
-            android:duration="250"/>
+            android:duration="0"/>
 </set>

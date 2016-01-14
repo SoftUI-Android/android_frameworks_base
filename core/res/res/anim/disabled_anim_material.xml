@@ -26,7 +26,7 @@
         <set>
             <objectAnimator android:propertyName="alpha"
                 android:duration="@integer/disabled_alpha_animation_duration"
-                android:valueTo="1"
+                android:valueTo="0"
                 android:valueType="floatType"/>
         </set>
     </item>
