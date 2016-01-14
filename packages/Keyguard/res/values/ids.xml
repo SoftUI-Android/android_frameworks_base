@@ -18,7 +18,7 @@
 <resources>
     <item type="id" name="date_view"/>
     <item type="id" name="alarm_status"/>
-    <item type="id" name="keyguard_status_view'"/>
+    <item type="id" name="keyguard_status_view"/>
     <item type="id" name="keyguard_clock_container"/>
     <item type="id" name="owner_info"/>
 </resources>
