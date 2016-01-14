@@ -47,6 +47,7 @@ import com.android.systemui.R;
 import com.android.systemui.qs.QSTile;
 import com.android.systemui.qs.tiles.UserDetailView;
 import com.android.systemui.statusbar.phone.SystemUIDialog;
+import cyanogenmod.app.StatusBarPanelCustomTile;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -502,6 +503,11 @@ public class UserSwitcherController {
         }
 
         @Override
+        public StatusBarPanelCustomTile getCustomTile() {
+            return null;
+        }
+
+        @Override
         public Boolean getToggleState() {
             return null;
         }
@@ -585,7 +591,7 @@ public class UserSwitcherController {
     }
 
     public static boolean isUserSwitcherAvailable(UserManager um) {
-        return um.opensUserSwitcher();
+        return UserManager.supportsMultipleUsers() && um.isUserSwitcherEnabled();
     }
 
 }

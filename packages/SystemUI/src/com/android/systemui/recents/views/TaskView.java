@@ -21,6 +21,7 @@ import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.*;
+import android.provider.Settings;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewOutlineProvider;
@@ -41,6 +42,7 @@ public class TaskView extends FrameLayout implements Task.TaskCallbacks,
     interface TaskViewCallbacks {
         public void onTaskViewAppIconClicked(TaskView tv);
         public void onTaskViewAppInfoClicked(TaskView tv);
+        public void onTaskViewLongClicked(TaskView tv);
         public void onTaskViewClicked(TaskView tv, Task task, boolean lockToTask);
         public void onTaskViewDismissed(TaskView tv);
         public void onTaskViewClipStateChanged(TaskView tv);
@@ -289,10 +291,8 @@ public class TaskView extends FrameLayout implements Task.TaskCallbacks,
                 ctx.postAnimationTrigger.increment();
 
                 // Animate the action button in
-                mActionButtonView.animate().alpha(1f)
-                        .setInterpolator(mConfig.fastOutLinearInInterpolator)
-                        .withLayer()
-                        .start();
+                fadeInActionButton(mConfig.transitionEnterFromAppDelay,
+                        mConfig.taskViewEnterFromAppDuration);
             } else {
                 // Animate the task up if it was occluding the launch target
                 if (ctx.currentTaskOccludesLaunchTarget) {
@@ -357,6 +357,19 @@ public class TaskView extends FrameLayout implements Task.TaskCallbacks,
         }, startDelay);
     }
 
+    public void fadeInActionButton(int delay, int duration) {
+        // Hide the action button
+        mActionButtonView.setAlpha(0f);
+
+        // Animate the action button in
+        mActionButtonView.animate().alpha(1f)
+                .setStartDelay(delay)
+                .setDuration(duration)
+                .setInterpolator(PhoneStatusBar.ALPHA_IN)
+                .withLayer()
+                .start();
+    }
+
     /** Animates this task view as it leaves recents by pressing home. */
     void startExitToHomeAnimation(ViewAnimation.TaskViewExitContext ctx) {
         animate()
@@ -417,16 +430,16 @@ public class TaskView extends FrameLayout implements Task.TaskCallbacks,
     }
 
     /** Animates the deletion of this task view */
-    void startDeleteTaskAnimation(final Runnable r) {
+    void startDeleteTaskAnimation(final Runnable r, long delayed) {
         // Disabling clipping with the stack while the view is animating away
         setClipViewInStack(false);
 
         animate().translationX(mConfig.taskViewRemoveAnimTranslationXPx)
             .alpha(0f)
-            .setStartDelay(0)
+            .setStartDelay(delayed)
             .setUpdateListener(null)
             .setInterpolator(mConfig.fastOutSlowInInterpolator)
-            .setDuration(mConfig.taskViewRemoveAnimDuration)
+            .setDuration(mConfig.taskViewRemoveAnimDuration - delayed)
             .withEndAction(new Runnable() {
                 @Override
                 public void run() {
@@ -460,7 +473,7 @@ public class TaskView extends FrameLayout implements Task.TaskCallbacks,
     }
 
     /** Dismisses this task. */
-    void dismissTask() {
+    void dismissTask(long delayed) {
         // Animate out the view and call the callback
         final TaskView tv = this;
         startDeleteTaskAnimation(new Runnable() {
@@ -470,7 +483,7 @@ public class TaskView extends FrameLayout implements Task.TaskCallbacks,
                     mCb.onTaskViewDismissed(tv);
                 }
             }
-        });
+        }, delayed);
     }
 
     /**
@@ -638,8 +651,10 @@ public class TaskView extends FrameLayout implements Task.TaskCallbacks,
         mTask.setCallbacks(this);
 
         // Hide the action button if lock to app is disabled for this view
-        if (!t.lockToTaskEnabled && mActionButtonView.getVisibility() != View.GONE) {
-            mActionButtonView.setVisibility(View.GONE);
+        int lockButtonVisibility = (!t.lockToTaskEnabled || !t.lockToThisTask) ? GONE : VISIBLE;
+        if (mActionButtonView.getVisibility() != lockButtonVisibility) {
+            mActionButtonView.setVisibility(lockButtonVisibility);
+            requestLayout();
         }
     }
 
@@ -701,7 +716,7 @@ public class TaskView extends FrameLayout implements Task.TaskCallbacks,
                             mCb.onTaskViewAppIconClicked(tv);
                         }
                     } else if (v == mHeaderView.mDismissButton) {
-                        dismissTask();
+                        dismissTask(0L);
                     }
                 }
             }, 125);
@@ -722,7 +737,13 @@ public class TaskView extends FrameLayout implements Task.TaskCallbacks,
     public boolean onLongClick(View v) {
         if (v == mHeaderView.mApplicationIcon) {
             if (mCb != null) {
-                mCb.onTaskViewAppInfoClicked(this);
+                boolean showDevShortcuts = Settings.Secure.getInt(v.getContext().getContentResolver(),
+                            Settings.Secure.DEVELOPMENT_SHORTCUT, 0) != 0;
+                if (showDevShortcuts) {
+                    mCb.onTaskViewLongClicked(this);
+                } else {
+                    mCb.onTaskViewAppInfoClicked(this);
+                }
                 return true;
             }
         }

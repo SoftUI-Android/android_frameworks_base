@@ -177,6 +177,14 @@ public class RecentsConfiguration {
         return sInstance;
     }
 
+    /** Returns the current recents configuration or creates and populates it if required */
+    public static RecentsConfiguration getInstance(Context context, SystemServicesProxy ssp) {
+        if (sInstance == null) {
+            sInstance = reinitialize(context, ssp);
+        }
+        return sInstance;
+    }
+
     /** Updates the state, given the specified context */
     void update(Context context) {
         SharedPreferences settings = context.getSharedPreferences(context.getPackageName(), 0);
@@ -211,7 +219,6 @@ public class RecentsConfiguration {
         maxNumTasksToLoad = ActivityManager.getMaxRecentTasksStatic();
 
         // Search Bar
-        searchBarSpaceHeightPx = res.getDimensionPixelSize(R.dimen.recents_search_bar_space_height);
         searchBarAppWidgetId = settings.getInt(Constants.Values.App.Key_SearchAppWidgetId, -1);
 
         // Task stack
@@ -285,6 +292,8 @@ public class RecentsConfiguration {
         altTabKeyDelay = res.getInteger(R.integer.recents_alt_tab_key_delay);
         fakeShadows = res.getBoolean(R.bool.config_recents_fake_shadows);
         svelteLevel = res.getInteger(R.integer.recents_svelte_level);
+
+        updateShowSearch(context);
     }
 
     /** Updates the system insets */
@@ -307,6 +316,14 @@ public class RecentsConfiguration {
                 Settings.Global.DEVELOPMENT_SETTINGS_ENABLED) != 0;
         lockToAppEnabled = ssp.getSystemSetting(context,
                 Settings.System.LOCK_TO_APP_ENABLED) != 0;
+        updateShowSearch(context);
+    }
+
+    private void updateShowSearch(Context context) {
+        boolean showSearchBar = Settings.System.getInt(context.getContentResolver(),
+                Settings.System.RECENTS_SHOW_SEARCH_BAR, 1) == 1;
+        searchBarSpaceHeightPx = showSearchBar ? context.getResources().getDimensionPixelSize(
+                R.dimen.recents_search_bar_space_height): 0;
     }
 
     /** Called when the configuration has changed, and we want to reset any configuration specific

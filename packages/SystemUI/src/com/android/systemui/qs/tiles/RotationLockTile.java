@@ -19,6 +19,7 @@ package com.android.systemui.qs.tiles;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.graphics.drawable.AnimationDrawable;
 import android.provider.Settings;
 
 import com.android.systemui.R;
@@ -38,12 +39,21 @@ public class RotationLockTile extends QSTile<QSTile.BooleanState> {
     private final AnimationIcon mAutoToLandscape
             = new AnimationIcon(R.drawable.ic_landscape_from_auto_rotate_animation);
 
+
     private static final Intent DISPLAY_SETTINGS = new Intent(Settings.ACTION_DISPLAY_SETTINGS);
+    private static final Intent DISPLAY_ROTATION_SETTINGS =
+            new Intent("android.settings.DISPLAY_ROTATION_SETTINGS");
+
     private final RotationLockController mController;
+
+    private final boolean mAdvancedMode;
 
     public RotationLockTile(Host host) {
         super(host);
         mController = host.getRotationLockController();
+
+        mAdvancedMode = Settings.Secure.getInt(mContext.getContentResolver(),
+                Settings.Secure.ADVANCED_MODE, 1) == 1;
     }
 
     @Override
@@ -70,7 +80,11 @@ public class RotationLockTile extends QSTile<QSTile.BooleanState> {
 
     @Override
     protected void handleLongClick() {
-        mHost.startSettingsActivity(DISPLAY_SETTINGS);
+        if (!mAdvancedMode) {
+            mHost.startSettingsActivity(DISPLAY_SETTINGS);
+        } else {
+            mHost.startSettingsActivity(DISPLAY_ROTATION_SETTINGS);
+        }
     }
 
     @Override
@@ -80,6 +94,10 @@ public class RotationLockTile extends QSTile<QSTile.BooleanState> {
                 : mController.isRotationLocked();
         final boolean userInitiated = arg != null ? ((UserBoolean) arg).userInitiated : false;
         state.visible = mController.isRotationLockAffordanceVisible();
+        if (state.value == rotationLocked && state.contentDescription != null) {
+            // No change and initialized, no need to update all the values.
+            return;
+        }
         state.value = rotationLocked;
         final boolean portrait = mContext.getResources().getConfiguration().orientation
                 != Configuration.ORIENTATION_LANDSCAPE;

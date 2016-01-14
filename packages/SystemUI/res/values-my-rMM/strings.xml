@@ -33,8 +33,8 @@
     <string name="status_bar_ongoing_events_title" msgid="1682504513316879202">"လက်ရှိအသုံးပြုမှု"</string>
     <string name="status_bar_latest_events_title" msgid="6594767438577593172">"အကြောင်းကြားချက်များ။"</string>
     <string name="battery_low_title" msgid="6456385927409742437">"ဘက်ထရီ အားနည်းနေ"</string>
-    <string name="battery_low_percent_format" msgid="2900940511201380775">"<xliff:g id="PERCENTAGE">%s</xliff:g> ကျန်ရှိနေ"</string>
-    <string name="battery_low_percent_format_saver_started" msgid="6859235584035338833">"<xliff:g id="PERCENTAGE">%s</xliff:g> ကျန်ရှိနေ။ ဘက်ထရီ ချွေတာမှု ဖွင့်ထား။"</string>
+    <string name="battery_low_percent_format" msgid="1077244949318261761">"<xliff:g id="NUMBER">%d%%</xliff:g> ကျန်ရှိသည်"</string>
+    <string name="battery_low_percent_format_saver_started" msgid="6534746636002666456">"<xliff:g id="NUMBER">%d%%</xliff:g> ကျန်နေ။ ဘက်ထရီ ချွေတာသူ ဖွင့်ထား။"</string>
     <string name="invalid_charger" msgid="4549105996740522523">"လက်ရှိUSBအားသွင်းခြင်း အသုံးမပြုနိုင်ပါ \n ပေးထားသောအားသွင်းကိရိယာကိုသာ အသုံးပြုပါ"</string>
     <string name="invalid_charger_title" msgid="3515740382572798460">"USB အားသွင်းမှု မပံ့ပိုးပါ။"</string>
     <string name="invalid_charger_text" msgid="5474997287953892710">"ပေးခဲ့သည့် အားသွင်းစက်ကိုသာ အသုံးပြုပါ"</string>
@@ -155,8 +155,8 @@
     <string name="accessibility_tty_enabled" msgid="4613200365379426561">"TeleTypewriter ရရှိသည်။"</string>
     <string name="accessibility_ringer_vibrate" msgid="666585363364155055">"တုန်ခါခြင်း ဖုန်းမြည်သံ"</string>
     <string name="accessibility_ringer_silent" msgid="9061243307939135383">"ဖုန်းမြည်သံပိတ်သည်။"</string>
-    <!-- no translation found for accessibility_casting (6887382141726543668) -->
-    <skip />
+        <!-- no translation found for accessibility_casting (6887382141726543668) -->
+        <skip />
     <string name="accessibility_recents_item_will_be_dismissed" msgid="395770242498031481">"<xliff:g id="APP">%s</xliff:g>ကို ပယ်လိုက်ရန်"</string>
     <string name="accessibility_recents_item_dismissed" msgid="6803574935084867070">"<xliff:g id="APP">%s</xliff:g> ထုတ်ထားသည်။"</string>
     <string name="accessibility_recents_item_launched" msgid="7616039892382525203">"<xliff:g id="APP">%s</xliff:g>ကို စတင်နေသည်။"</string>
@@ -270,7 +270,7 @@
     <string name="quick_settings_cellular_detail_title" msgid="8575062783675171695">"ဆယ်လူလာ ဒေတာ"</string>
     <string name="quick_settings_cellular_detail_data_usage" msgid="1964260360259312002">"ဒေတာ သုံးစွဲမှု"</string>
     <string name="quick_settings_cellular_detail_remaining_data" msgid="722715415543541249">"ကျန်ရှိ ဒေတာ"</string>
-    <string name="quick_settings_cellular_detail_over_limit" msgid="967669665390990427">"ကန့်သတ်ချက် ကျော်လွန်"</string>
+    <string name="quick_settings_cellular_detail_over_limit" msgid="3242930457130971204">"ကန့်သတ်ချက် ပြည့်မီသွားပြီ - ဒေတာ  သုံးစွဲမှု ဆိုင်းငံ့ထားပြီ"</string>
     <string name="quick_settings_cellular_detail_data_used" msgid="1476810587475761478">"<xliff:g id="DATA_USED">%s</xliff:g> သုံးထား"</string>
     <string name="quick_settings_cellular_detail_data_limit" msgid="56011158504994128">"<xliff:g id="DATA_LIMIT">%s</xliff:g> ကန့်သတ်ချက်"</string>
     <string name="quick_settings_cellular_detail_data_warning" msgid="2440098045692399009">"<xliff:g id="DATA_LIMIT">%s</xliff:g> သတိပေးချက်"</string>

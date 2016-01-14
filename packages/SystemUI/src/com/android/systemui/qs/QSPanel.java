@@ -19,14 +19,19 @@ package com.android.systemui.qs;
 import android.animation.Animator;
 import android.animation.Animator.AnimatorListener;
 import android.animation.AnimatorListenerAdapter;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.graphics.Point;
 import android.os.Handler;
 import android.os.Message;
+import android.os.Process;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.AttributeSet;
-import android.util.TypedValue;
+import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -36,23 +41,31 @@ import android.widget.TextView;
 
 import com.android.systemui.FontSizeUtils;
 import com.android.systemui.R;
+import com.android.systemui.cm.UserContentObserver;
 import com.android.systemui.qs.QSTile.DetailAdapter;
 import com.android.systemui.settings.BrightnessController;
 import com.android.systemui.settings.ToggleSlider;
 import com.android.systemui.statusbar.phone.QSTileHost;
 import com.android.systemui.statusbar.policy.BrightnessMirrorController;
+import com.android.systemui.statusbar.policy.KeyguardMonitor;
+
+import cyanogenmod.app.StatusBarPanelCustomTile;
 
 import java.util.ArrayList;
 import java.util.Collection;
 
 /** View that represents the quick settings tile panel. **/
 public class QSPanel extends ViewGroup {
+    public static final int VIBRATION_DURATION_SHORT = 0;
+    public static final int VIBRATION_DURATION_LONG = 1;
+
     private static final float TILE_ASPECT = 1.2f;
 
     private final Context mContext;
     private final ArrayList<TileRecord> mRecords = new ArrayList<TileRecord>();
     private final View mDetail;
     private final ViewGroup mDetailContent;
+    private final TextView mDetailRemoveButton;
     private final TextView mDetailSettingsButton;
     private final TextView mDetailDoneButton;
     private final View mBrightnessView;
@@ -68,6 +81,7 @@ public class QSPanel extends ViewGroup {
     private int mDualTileUnderlap;
     private int mBrightnessPaddingTop;
     private int mGridHeight;
+    private int mTranslationTop;
     private boolean mExpanded;
     private boolean mListening;
     private boolean mClosingDetail;
@@ -80,6 +94,21 @@ public class QSPanel extends ViewGroup {
     private QSFooter mFooter;
     private boolean mGridContentVisible = true;
 
+    private boolean mUseMainTiles = false;
+
+    private DetailCallback mDetailCallback;
+    private int mContainerTop;
+
+    private boolean mShouldVibrate;
+
+  private boolean mHideQsTilesWithSensitiveData;
+    private final KeyguardMonitor.Callback mKeyguardListener = new KeyguardMonitor.Callback() {
+        @Override
+        public void onKeyguardChanged() {
+            refreshAllTiles();
+        }
+    };
+
     public QSPanel(Context context) {
         this(context, null);
     }
@@ -90,6 +119,7 @@ public class QSPanel extends ViewGroup {
 
         mDetail = LayoutInflater.from(context).inflate(R.layout.qs_detail, this, false);
         mDetailContent = (ViewGroup) mDetail.findViewById(android.R.id.content);
+        mDetailRemoveButton = (TextView) mDetail.findViewById(android.R.id.button3);
         mDetailSettingsButton = (TextView) mDetail.findViewById(android.R.id.button2);
         mDetailDoneButton = (TextView) mDetail.findViewById(android.R.id.button1);
         updateDetailText();
@@ -97,9 +127,6 @@ public class QSPanel extends ViewGroup {
         mDetail.setClickable(true);
         mBrightnessView = LayoutInflater.from(context).inflate(
                 R.layout.quick_settings_brightness_dialog, this, false);
-        // enable the brightness icon
-        ImageView brightnessIcon = (ImageView) mBrightnessView.findViewById(R.id.brightness_icon);
-        brightnessIcon.setVisibility(View.VISIBLE);
         mFooter = new QSFooter(this, context);
         addView(mDetail);
         addView(mBrightnessView);
@@ -108,20 +135,86 @@ public class QSPanel extends ViewGroup {
         updateResources();
 
         mBrightnessController = new BrightnessController(getContext(),
-                brightnessIcon,
+                (ImageView) findViewById(R.id.brightness_icon),
                 (ToggleSlider) findViewById(R.id.brightness_slider));
 
         mDetailDoneButton.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View v) {
                 closeDetail();
+                vibrateTile(VIBRATION_DURATION_SHORT);
             }
         });
+
+        final SettingsObserver settingsObserver = new SettingsObserver(new Handler());
+        settingsObserver.observe();
+    }
+
+    private class SettingsObserver extends UserContentObserver {
+
+        SettingsObserver(Handler handler) {
+            super(handler);
+        }
+
+        @Override
+        protected void observe() {
+            super.observe();
+            ContentResolver resolver = mContext.getContentResolver();
+            resolver.registerContentObserver(
+                    Settings.Secure.getUriFor(Settings.Secure.QS_TILES_VIBRATE),
+                    false, this, UserHandle.USER_ALL);
+
+            onChange(false);
+        }
+
+        @Override
+        protected void unobserve() {
+            super.unobserve();
+            mContext.getContentResolver().unregisterContentObserver(this);
+        }
+
+        @Override
+        protected void update() {
+            ContentResolver resolver = mContext.getContentResolver();
+            mShouldVibrate = Settings.Secure.getIntForUser(resolver,
+                    Settings.Secure.QS_TILES_VIBRATE,
+                    1, UserHandle.USER_CURRENT) != 0;
+        }
+    }
+
+    public void vibrateTile(int duration) {
+        if (!mShouldVibrate) return;
+
+        if (VIBRATION_DURATION_SHORT == duration) {
+            performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+        } else if (VIBRATION_DURATION_LONG == duration) {
+            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        }
+    }
+
+    /**
+     * Enable/disable brightness slider.
+     */
+    private boolean showBrightnessSlider() {
+        boolean brightnessSliderEnabled = Settings.Secure.getInt(
+            mContext.getContentResolver(), Settings.Secure.QS_SHOW_BRIGHTNESS_SLIDER,
+                1) == 1;
+        ToggleSlider brightnessSlider = (ToggleSlider) findViewById(R.id.brightness_slider);
+        if (brightnessSliderEnabled) {
+            mBrightnessView.setVisibility(VISIBLE);
+            brightnessSlider.setVisibility(VISIBLE);
+        } else {
+            mBrightnessView.setVisibility(GONE);
+            brightnessSlider.setVisibility(GONE);
+        }
+        updateResources();
+        return brightnessSliderEnabled;
     }
 
     private void updateDetailText() {
         mDetailDoneButton.setText(R.string.quick_settings_done);
         mDetailSettingsButton.setText(R.string.quick_settings_more_settings);
+        mDetailRemoveButton.setText(R.string.quick_settings_remove);
     }
 
     public void setBrightnessMirror(BrightnessMirrorController c) {
@@ -136,8 +229,20 @@ public class QSPanel extends ViewGroup {
         mCallback = callback;
     }
 
+    public void setDetailCallback(DetailCallback callback) {
+        mDetailCallback = callback;
+    }
+
+    public void setTopOfContainer(int t) {
+        mContainerTop = t;
+    }
+
     public void setHost(QSTileHost host) {
+        if (mHost != null) {
+            mHost.getKeyguardMonitor().removeCallback(mKeyguardListener);
+        }
         mHost = host;
+        mHost.getKeyguardMonitor().addCallback(mKeyguardListener);
         mFooter.setHost(host);
     }
 
@@ -170,6 +275,7 @@ public class QSPanel extends ViewGroup {
         super.onConfigurationChanged(newConfig);
         FontSizeUtils.updateFontSize(mDetailDoneButton, R.dimen.qs_detail_button_text_size);
         FontSizeUtils.updateFontSize(mDetailSettingsButton, R.dimen.qs_detail_button_text_size);
+        FontSizeUtils.updateFontSize(mDetailRemoveButton, R.dimen.qs_detail_button_text_size);
 
         // We need to poke the detail views as well as they might not be attached to the view
         // hierarchy but reused at a later point.
@@ -181,6 +287,15 @@ public class QSPanel extends ViewGroup {
             }
         }
         mFooter.onConfigurationChanged();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        if (mHost != null) {
+            mHost.getKeyguardMonitor().removeCallback(mKeyguardListener);
+        }
+        mBrightnessController.unregisterCallbacks();
     }
 
     public void setExpanded(boolean expanded) {
@@ -201,7 +316,7 @@ public class QSPanel extends ViewGroup {
         if (mListening) {
             refreshAllTiles();
         }
-        if (listening) {
+        if (listening && showBrightnessSlider()) {
             mBrightnessController.registerCallbacks();
         } else {
             mBrightnessController.unregisterCallbacks();
@@ -209,8 +324,25 @@ public class QSPanel extends ViewGroup {
     }
 
     public void refreshAllTiles() {
-        for (TileRecord r : mRecords) {
+        mUseMainTiles = Settings.Secure.getIntForUser(getContext().getContentResolver(),
+                Settings.Secure.QS_USE_MAIN_TILES, 1, UserHandle.myUserId()) == 1;
+        for (int i = 0; i < mRecords.size(); i++) {
+            TileRecord r = mRecords.get(i);
+            r.tileView.setDual(mUseMainTiles && i < 2);
             r.tile.refreshState();
+
+            // If we are in a secure lockscreen, then we should hide tiles with sensitive
+            // data to be accessed from the lockscreen
+            boolean hideTilesWithSensitiveData = mHideQsTilesWithSensitiveData
+                    && mHost != null
+                    && mHost.getKeyguardMonitor().isShowing()
+                    && mHost.getKeyguardMonitor().isSecure();
+            if (hideTilesWithSensitiveData && r.tile.hasSensitiveData()) {
+                r.tileView.setVisibility(View.GONE);
+            } else if (r.tile.hasSensitiveData() && r.lastVisibityState == View.VISIBLE
+                    && r.tileView.getVisibility() != View.VISIBLE){
+                r.tileView.setVisibility(View.VISIBLE);
+            }
         }
         mFooter.refreshState();
     }
@@ -232,6 +364,15 @@ public class QSPanel extends ViewGroup {
     private void handleSetTileVisibility(View v, int visibility) {
         if (visibility == v.getVisibility()) return;
         v.setVisibility(visibility);
+    }
+
+    private void setTileEnabled(View v, boolean enabled) {
+        mHandler.obtainMessage(H.SET_TILE_ENABLED, enabled ? 1 : 0, 0, v).sendToTarget();
+    }
+
+    private void handleSetTileEnabled(View v, boolean enabled) {
+        if (enabled == v.isEnabled()) return;
+        v.setEnabled(enabled);
     }
 
     public void setTiles(Collection<QSTile<?>> tiles) {
@@ -262,7 +403,15 @@ public class QSPanel extends ViewGroup {
                     // then we just set it to invisible, to ensure that it gets visible again
                     visibility = INVISIBLE;
                 }
-                setTileVisibility(r.tileView, visibility);
+                r.lastVisibityState = visibility;
+                boolean hideTilesWithSensitiveData = mHideQsTilesWithSensitiveData
+                        && mHost != null
+                        && mHost.getKeyguardMonitor().isShowing()
+                        && mHost.getKeyguardMonitor().isSecure();
+                if (!r.tile.hasSensitiveData() || !hideTilesWithSensitiveData) {
+                    setTileVisibility(r.tileView, visibility);
+                }
+                setTileEnabled(r.tileView, state.enabled);
                 r.tileView.onStateChanged(state);
             }
             @Override
@@ -273,6 +422,7 @@ public class QSPanel extends ViewGroup {
             public void onToggleStateChanged(boolean state) {
                 if (mDetailRecord == r) {
                     fireToggleStateChanged(state);
+                    vibrateTile(VIBRATION_DURATION_SHORT);
                 }
             }
             @Override
@@ -293,18 +443,21 @@ public class QSPanel extends ViewGroup {
             @Override
             public void onClick(View v) {
                 r.tile.click();
+                vibrateTile(VIBRATION_DURATION_SHORT);
             }
         };
         final View.OnClickListener clickSecondary = new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 r.tile.secondaryClick();
+                vibrateTile(VIBRATION_DURATION_SHORT);
             }
         };
         final View.OnLongClickListener longClick = new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View v) {
                 r.tile.longClick();
+                vibrateTile(VIBRATION_DURATION_LONG);
                 return true;
             }
         };
@@ -350,7 +503,7 @@ public class QSPanel extends ViewGroup {
         }
         int x = r.tileView.getLeft() + r.tileView.getWidth() / 2;
         int y = r.tileView.getTop() + r.tileView.getHeight() / 2;
-        handleShowDetailImpl(r, show, x, y);
+        handleShowDetailImpl(r, show, x, y - mTranslationTop);
     }
 
     private void handleShowDetailImpl(Record r, boolean show, int x, int y) {
@@ -368,6 +521,20 @@ public class QSPanel extends ViewGroup {
                 @Override
                 public void onClick(View v) {
                     mHost.startSettingsActivity(settingsIntent);
+                    vibrateTile(VIBRATION_DURATION_LONG);
+                }
+            });
+
+            // Do not display remove tile button for dynamic tiles
+            final StatusBarPanelCustomTile customTile = detailAdapter.getCustomTile();
+            mDetailRemoveButton.setVisibility(customTile != null &&
+                    !(customTile.getPackage().equals(mContext.getPackageName())
+                    || customTile.getUid() == Process.SYSTEM_UID) ? VISIBLE : GONE);
+            mDetailRemoveButton.setOnClickListener(new OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    mHost.collapsePanels();
+                    mHost.removeCustomTile(customTile);
                 }
             });
 
@@ -388,6 +555,7 @@ public class QSPanel extends ViewGroup {
     }
 
     private void setGridContentVisibility(boolean visible) {
+        mGridContentVisible = visible;
         int newVis = visible ? VISIBLE : INVISIBLE;
         for (int i = 0; i < mRecords.size(); i++) {
             TileRecord tileRecord = mRecords.get(i);
@@ -395,8 +563,7 @@ public class QSPanel extends ViewGroup {
                 tileRecord.tileView.setVisibility(newVis);
             }
         }
-        mBrightnessView.setVisibility(newVis);
-        mGridContentVisible = visible;
+        mBrightnessView.setVisibility(showBrightnessSlider() ? newVis : GONE);
     }
 
     @Override
@@ -408,15 +575,15 @@ public class QSPanel extends ViewGroup {
         int r = -1;
         int c = -1;
         int rows = 0;
-        boolean rowIsDual = false;
         for (TileRecord record : mRecords) {
             if (record.tileView.getVisibility() == GONE) continue;
             // wrap to next column if we've reached the max # of columns
-            // also don't allow dual + single tiles on the same row
-            if (r == -1 || c == (mColumns - 1) || rowIsDual != record.tile.supportsDualTargets()) {
+            if (mUseMainTiles && r == 0 && c == 1) {
+                r = 1;
+                c = 0;
+            } else if (r == -1 || c == (mColumns - 1)) {
                 r++;
                 c = 0;
-                rowIsDual = record.tile.supportsDualTargets();
             } else {
                 c++;
             }
@@ -426,21 +593,31 @@ public class QSPanel extends ViewGroup {
         }
 
         for (TileRecord record : mRecords) {
-            if (record.tileView.setDual(record.tile.supportsDualTargets())) {
-                record.tileView.handleStateChanged(record.tile.getState());
-            }
             if (record.tileView.getVisibility() == GONE) continue;
-            final int cw = record.row == 0 ? mLargeCellWidth : mCellWidth;
-            final int ch = record.row == 0 ? mLargeCellHeight : mCellHeight;
+            final int cw = (mUseMainTiles && record.row == 0) ? mLargeCellWidth : mCellWidth;
+            final int ch = (mUseMainTiles && record.row == 0) ? mLargeCellHeight : mCellHeight;
             record.tileView.measure(exactly(cw), exactly(ch));
         }
         int h = rows == 0 ? brightnessHeight : (getRowTop(rows) + mPanelPaddingBottom);
         if (mFooter.hasFooter()) {
             h += mFooter.getView().getMeasuredHeight();
         }
+
         mDetail.measure(exactly(width), MeasureSpec.UNSPECIFIED);
-        if (mDetail.getMeasuredHeight() < h) {
-            mDetail.measure(exactly(width), exactly(h));
+        if (isShowingDetail()) {
+            Point size = new Point();
+            getDisplay().getSize(size);
+            final int panelBottom = (mContainerTop - mTranslationTop + h);
+            final int detailMinHeight = size.y - mContainerTop - mPanelPaddingBottom;
+
+            if (size.y > panelBottom) {
+                int delta = size.y - panelBottom;
+                // panel is smaller than screen size
+                mDetail.measure(exactly(width), exactly(detailMinHeight - delta));
+            } else {
+                // panel is hanging below the screen
+                mDetail.measure(exactly(width), exactly(detailMinHeight));
+            }
         }
         mGridHeight = h;
         setMeasuredDimension(width, Math.max(h, mDetail.getMeasuredHeight()));
@@ -460,7 +637,7 @@ public class QSPanel extends ViewGroup {
         for (TileRecord record : mRecords) {
             if (record.tileView.getVisibility() == GONE) continue;
             final int cols = getColumnCount(record.row);
-            final int cw = record.row == 0 ? mLargeCellWidth : mCellWidth;
+            final int cw = (mUseMainTiles && record.row == 0) ? mLargeCellWidth : mCellWidth;
             final int extra = (w - cw * cols) / (cols + 1);
             int left = record.col * cw + (record.col + 1) * extra;
             final int top = getRowTop(record.row);
@@ -475,7 +652,7 @@ public class QSPanel extends ViewGroup {
             record.tileView.layout(left, top, right, top + record.tileView.getMeasuredHeight());
         }
         final int dh = Math.max(mDetail.getMeasuredHeight(), getMeasuredHeight());
-        mDetail.layout(0, 0, mDetail.getMeasuredWidth(), dh);
+        mDetail.layout(0, mTranslationTop, mDetail.getMeasuredWidth(), dh + mTranslationTop);
         if (mFooter.hasFooter()) {
             View footer = mFooter.getView();
             footer.layout(0, getMeasuredHeight() - footer.getMeasuredHeight(),
@@ -486,7 +663,8 @@ public class QSPanel extends ViewGroup {
     private int getRowTop(int row) {
         if (row <= 0) return mBrightnessView.getMeasuredHeight() + mBrightnessPaddingTop;
         return mBrightnessView.getMeasuredHeight() + mBrightnessPaddingTop
-                + mLargeCellHeight - mDualTileUnderlap + (row - 1) * mCellHeight;
+                + (mUseMainTiles ? mLargeCellHeight - mDualTileUnderlap : mCellHeight)
+                + (row - 1) * mCellHeight;
     }
 
     private int getColumnCount(int row) {
@@ -501,6 +679,10 @@ public class QSPanel extends ViewGroup {
     private void fireShowingDetail(QSTile.DetailAdapter detail) {
         if (mCallback != null) {
             mCallback.onShowingDetail(detail);
+        }
+        if (mDetailCallback != null && detail != null) {
+            // don't notify when hiding, wait for animation to finish
+            mDetailCallback.onDetailChanged(true);
         }
     }
 
@@ -524,15 +706,28 @@ public class QSPanel extends ViewGroup {
         fireScanStateChanged(scanState);
     }
 
+    public void setDetailOffset(int translationY) {
+        if (!isShowingDetail()) {
+            mTranslationTop = translationY;
+        }
+    }
+
+    public void setHideQsTilesWithSensitiveData(boolean value) {
+        mHideQsTilesWithSensitiveData = value;
+    }
+
     private class H extends Handler {
         private static final int SHOW_DETAIL = 1;
         private static final int SET_TILE_VISIBILITY = 2;
+        private static final int SET_TILE_ENABLED = 3;
         @Override
         public void handleMessage(Message msg) {
             if (msg.what == SHOW_DETAIL) {
                 handleShowDetail((Record)msg.obj, msg.arg1 != 0);
             } else if (msg.what == SET_TILE_VISIBILITY) {
                 handleSetTileVisibility((View)msg.obj, msg.arg1);
+            } else if (msg.what == SET_TILE_ENABLED) {
+                handleSetTileEnabled((View)msg.obj, msg.arg1 == 1);
             }
         }
     }
@@ -548,6 +743,7 @@ public class QSPanel extends ViewGroup {
         int row;
         int col;
         boolean scanState;
+        int lastVisibityState = View.VISIBLE;
     }
 
     private final AnimatorListenerAdapter mTeardownDetailWhenDone = new AnimatorListenerAdapter() {
@@ -555,6 +751,9 @@ public class QSPanel extends ViewGroup {
             mDetailContent.removeAllViews();
             setDetailRecord(null);
             mClosingDetail = false;
+            if (mDetailCallback != null) {
+                mDetailCallback.onDetailChanged(false);
+            }
         };
     };
 
@@ -573,6 +772,10 @@ public class QSPanel extends ViewGroup {
             }
         }
     };
+
+    public interface DetailCallback {
+        void onDetailChanged(boolean showing);
+    }
 
     public interface Callback {
         void onShowingDetail(QSTile.DetailAdapter detail);

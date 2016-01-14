@@ -1,4 +1,7 @@
 /*
+ * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+ * Not a Contribution.
+ *
  * Copyright (C) 2011 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +20,9 @@
 package com.android.systemui.statusbar;
 
 import android.content.Context;
+import android.os.SystemProperties;
+import android.telephony.SignalStrength;
+import android.telephony.SubscriptionManager;
 import android.telephony.SubscriptionInfo;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -56,7 +62,6 @@ public class SignalClusterView
     private int mAirplaneContentDescription;
     private String mWifiDescription;
     private ArrayList<PhoneState> mPhoneStates = new ArrayList<PhoneState>();
-
     ViewGroup mWifiGroup;
     ImageView mVpn, mWifi, mAirplane, mNoSims;
     ImageView mWifiActivity;
@@ -66,8 +71,6 @@ public class SignalClusterView
 
     private int mWideTypeIconStartPadding;
     private int mSecondaryTelephonyPadding;
-    private int mEndPadding;
-    private int mEndPaddingNothingVisible;
 
     public SignalClusterView(Context context) {
         this(context, null);
@@ -100,10 +103,6 @@ public class SignalClusterView
                 R.dimen.wide_type_icon_start_padding);
         mSecondaryTelephonyPadding = getContext().getResources().getDimensionPixelSize(
                 R.dimen.secondary_telephony_padding);
-        mEndPadding = getContext().getResources().getDimensionPixelSize(
-                R.dimen.signal_cluster_battery_padding);
-        mEndPaddingNothingVisible = getContext().getResources().getDimensionPixelSize(
-                R.dimen.no_signal_cluster_battery_padding);
     }
 
     @Override
@@ -116,9 +115,11 @@ public class SignalClusterView
         mWifiActivity   = (ImageView) findViewById(R.id.wifi_inout);
         mAirplane       = (ImageView) findViewById(R.id.airplane);
         mNoSims         = (ImageView) findViewById(R.id.no_sims);
-        mWifiAirplaneSpacer =         findViewById(R.id.wifi_airplane_spacer);
-        mWifiSignalSpacer =           findViewById(R.id.wifi_signal_spacer);
-        mMobileSignalGroup = (LinearLayout) findViewById(R.id.mobile_signal_group);
+
+        mWifiAirplaneSpacer = findViewById(R.id.wifi_airplane_spacer);
+        mWifiSignalSpacer   = findViewById(R.id.wifi_signal_spacer);
+        mMobileSignalGroup   = (LinearLayout) findViewById(R.id.mobile_signal_group);
+
         for (PhoneState state : mPhoneStates) {
             mMobileSignalGroup.addView(state.mMobileGroup);
         }
@@ -133,6 +134,7 @@ public class SignalClusterView
         mWifi           = null;
         mWifiActivity   = null;
         mAirplane       = null;
+
         mMobileSignalGroup.removeAllViews();
         mMobileSignalGroup = null;
 
@@ -163,10 +165,15 @@ public class SignalClusterView
     }
 
     @Override
-    public void setMobileDataIndicators(boolean visible, int strengthIcon, int activityIcon, int typeIcon,
-            String contentDescription, String typeContentDescription, boolean isTypeIconWide,
-            int subId) {
-        PhoneState state = getOrInflateState(subId);
+    public void setMobileDataIndicators(boolean visible, int strengthIcon,
+            int activityIcon, int typeIcon, String contentDescription,
+            String typeContentDescription, boolean isTypeIconWide,
+            boolean showRoamingIndicator, int subId) {
+        PhoneState state = getState(subId);
+        if (state == null) {
+            return;
+        }
+
         state.mMobileVisible = visible;
         state.mMobileStrengthId = strengthIcon;
         state.mMobileActivityId = activityIcon;
@@ -174,6 +181,7 @@ public class SignalClusterView
         state.mMobileDescription = contentDescription;
         state.mMobileTypeDescription = typeContentDescription;
         state.mIsMobileTypeIconWide = isTypeIconWide;
+        state.mShowRoamingIndicator = showRoamingIndicator;
 
         apply();
     }
@@ -196,13 +204,13 @@ public class SignalClusterView
         }
     }
 
-    private PhoneState getOrInflateState(int subId) {
+    private PhoneState getState(int subId) {
         for (PhoneState state : mPhoneStates) {
             if (state.mSubId == subId) {
                 return state;
             }
         }
-        return inflatePhoneState(subId);
+        return null;
     }
 
     private PhoneState inflatePhoneState(int subId) {
@@ -261,7 +269,7 @@ public class SignalClusterView
             }
         }
 
-        if(mAirplane != null) {
+        if (mAirplane != null) {
             mAirplane.setImageDrawable(null);
         }
 
@@ -326,10 +334,6 @@ public class SignalClusterView
         }
 
         mNoSims.setVisibility(mNoSimsVisible ? View.VISIBLE : View.GONE);
-
-        boolean anythingVisible = mNoSimsVisible || mWifiVisible || mIsAirplaneMode
-                || anyMobileVisible || mVpnVisible;
-        setPaddingRelative(0, 0, anythingVisible ? mEndPadding : mEndPaddingNothingVisible, 0);
     }
 
     private class PhoneState {
@@ -337,11 +341,12 @@ public class SignalClusterView
         private boolean mMobileVisible = false;
         private int mMobileStrengthId = 0, mMobileTypeId = 0;
         private int mMobileActivityId = 0;
-        private boolean mIsMobileTypeIconWide;
+        private boolean mIsMobileTypeIconWide, mShowRoamingIndicator;
         private String mMobileDescription, mMobileTypeDescription;
 
         private ViewGroup mMobileGroup;
         private ImageView mMobile, mMobileType, mMobileActivity;
+        private ImageView mMobileRoaming;
 
         public PhoneState(int subId, Context context) {
             ViewGroup root = (ViewGroup) LayoutInflater.from(context)
@@ -349,22 +354,22 @@ public class SignalClusterView
             setViews(root);
             mSubId = subId;
         }
-
         public void setViews(ViewGroup root) {
             mMobileGroup    = root;
             mMobile         = (ImageView) root.findViewById(R.id.mobile_signal);
             mMobileType     = (ImageView) root.findViewById(R.id.mobile_type);
             mMobileActivity = (ImageView) root.findViewById(R.id.mobile_inout);
+            mMobileRoaming  = (ImageView) root.findViewById(R.id.mobile_roaming);
         }
-
         public boolean apply(boolean isSecondaryIcon) {
             if (mMobileVisible && !mIsAirplaneMode) {
                 mMobile.setImageResource(mMobileStrengthId);
-                mMobileType.setImageResource(mMobileTypeId);
-                mMobileGroup.setContentDescription(mMobileTypeDescription
-                        + " " + mMobileDescription);
+                mMobileGroup.setContentDescription(
+                        mMobileTypeDescription + " " + mMobileDescription);
                 mMobileGroup.setVisibility(View.VISIBLE);
                 mMobileActivity.setImageResource(mMobileActivityId);
+                mMobileType.setImageResource(mMobileTypeId);
+                mMobileRoaming.setVisibility(mShowRoamingIndicator ? View.VISIBLE : View.GONE);
             } else {
                 mMobileGroup.setVisibility(View.GONE);
             }
@@ -374,7 +379,6 @@ public class SignalClusterView
                     0, 0, 0);
             mMobile.setPaddingRelative(mIsMobileTypeIconWide ? mWideTypeIconStartPadding : 0,
                     0, 0, 0);
-
             if (DEBUG) Log.d(TAG, String.format("mobile: %s sig=%d typ=%d",
                         (mMobileVisible ? "VISIBLE" : "GONE"), mMobileStrengthId, mMobileTypeId));
 
@@ -382,7 +386,6 @@ public class SignalClusterView
 
             return mMobileVisible;
         }
-
         public void populateAccessibilityEvent(AccessibilityEvent event) {
             if (mMobileVisible && mMobileGroup != null
                     && mMobileGroup.getContentDescription() != null) {
@@ -391,4 +394,3 @@ public class SignalClusterView
         }
     }
 }
-

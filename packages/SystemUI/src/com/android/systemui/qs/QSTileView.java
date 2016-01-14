@@ -20,6 +20,8 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
+import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.graphics.Typeface;
 import android.graphics.drawable.Animatable;
 import android.graphics.drawable.Drawable;
@@ -122,16 +124,18 @@ public class QSTileView extends ViewGroup {
     private void recreateLabel() {
         CharSequence labelText = null;
         CharSequence labelDescription = null;
+        if (mDualLabel != null) {
+            labelText = mDualLabel.getText();
+            if (mLabel != null) {
+                labelDescription = mLabel.getContentDescription();
+            }
+            removeView(mDualLabel);
+            mDualLabel = null;
+        }
         if (mLabel != null) {
             labelText = mLabel.getText();
             removeView(mLabel);
             mLabel = null;
-        }
-        if (mDualLabel != null) {
-            labelText = mDualLabel.getText();
-            labelDescription = mLabel.getContentDescription();
-            removeView(mDualLabel);
-            mDualLabel = null;
         }
         final Resources res = mContext.getResources();
         if (mDual) {
@@ -175,9 +179,6 @@ public class QSTileView extends ViewGroup {
     public boolean setDual(boolean dual) {
         final boolean changed = dual != mDual;
         mDual = dual;
-        if (changed) {
-            recreateLabel();
-        }
         if (mTileBackground instanceof RippleDrawable) {
             setRipple((RippleDrawable) mTileBackground);
         }
@@ -199,6 +200,10 @@ public class QSTileView extends ViewGroup {
         mTopBackgroundView.setFocusable(dual);
         setFocusable(!dual);
         mDivider.setVisibility(dual ? VISIBLE : GONE);
+        if (changed) {
+            recreateLabel();
+            updateTopPadding();
+        }
         postInvalidate();
         return changed;
     }
@@ -284,7 +289,7 @@ public class QSTileView extends ViewGroup {
     private void updateRippleSize(int width, int height) {
         // center the touch feedback on the center of the icon, and dial it down a bit
         final int cx = width / 2;
-        final int cy = mDual ? mIcon.getTop() + mIcon.getHeight() / 2 : height / 2;
+        final int cy = mDual ? mIcon.getTop() + mIcon.getHeight() : height / 2;
         final int rad = (int)(mIcon.getHeight() * 1.25f);
         mRipple.setHotspotBounds(cx - rad, cy - rad, cx + rad, cy + rad);
     }
@@ -301,9 +306,20 @@ public class QSTileView extends ViewGroup {
             mDualLabel.setText(state.label);
             mDualLabel.setContentDescription(state.dualLabelContentDescription);
             mTopBackgroundView.setContentDescription(state.contentDescription);
+            if (!Objects.equals(state.enabled, mDualLabel.isEnabled())) {
+                mTopBackgroundView.setEnabled(state.enabled);
+                mDualLabel.setEnabled(state.enabled);
+                mDualLabel.setTextColor(mContext.getResources().getColor(state.enabled ?
+                        R.color.qs_tile_text : R.color.qs_tile_text_disabled));
+            }
         } else {
             mLabel.setText(state.label);
             setContentDescription(state.contentDescription);
+            if (!Objects.equals(state.enabled, mLabel.isEnabled())) {
+                mLabel.setEnabled(state.enabled);
+                mLabel.setTextColor(mContext.getResources().getColor(state.enabled ?
+                        R.color.qs_tile_text : R.color.qs_tile_text_disabled));
+            }
         }
     }
 
@@ -319,6 +335,14 @@ public class QSTileView extends ViewGroup {
                 if (!iv.isShown()) {
                     ((Animatable) d).stop(); // skip directly to end state
                 }
+            }
+        }
+        if (!Objects.equals(state.enabled, iv.isEnabled())) {
+            iv.setEnabled(state.enabled);
+            if (state.enabled) {
+                iv.setColorFilter(null);
+            } else {
+                iv.setColorFilter(Color.GRAY, PorterDuff.Mode.MULTIPLY);
             }
         }
     }

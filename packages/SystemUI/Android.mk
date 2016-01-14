@@ -6,9 +6,11 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_SRC_FILES := $(call all-java-files-under, src) \
     src/com/android/systemui/EventLogTags.logtags
 
-LOCAL_STATIC_JAVA_LIBRARIES := \
-            Keyguard \
-            guava
+LOCAL_STATIC_JAVA_LIBRARIES := Keyguard \
+    android-support-v7-palette \
+    android-support-v4 \
+    android-visualizer \
+    org.cyanogenmod.platform.sdk
 
 LOCAL_JAVA_LIBRARIES := telephony-common
 

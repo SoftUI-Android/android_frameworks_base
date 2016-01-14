@@ -118,7 +118,7 @@
 
     <!-- The default tiles to display in QuickSettings -->
     <string name="quick_settings_tiles_default" translatable="false">
-        wifi,bt,inversion,cell,airplane,rotation,flashlight,location,cast,hotspot
+        wifi,bt,cell,airplane,rotation,flashlight,location,cast
     </string>
 
     <!-- The tiles to display in QuickSettings -->
@@ -148,6 +148,13 @@
 
     <!-- milliseconds before the heads up notification accepts touches. -->
     <integer name="heads_up_sensitivity_delay">700</integer>
+
+    <!-- Show emergency call label only without carrier label on expanded notification area -->
+    <bool name="config_showEmergencyCallLabelOnly">true</bool>
+    <bool name="config_showDataConnectionView">true</bool>
+    <bool name="config_disableWifiAndBluetooth">false</bool>
+
+    <bool name="config_showRsrpSignalLevelforLTE">false</bool>
 
     <!-- The duration in seconds to wait before the dismiss buttons are shown. -->
     <integer name="recents_task_bar_dismiss_delay_seconds">1</integer>
@@ -192,7 +199,7 @@
     <integer name="recents_nav_bar_scrim_enter_duration">400</integer>
 
     <!-- The animation duration for animating the removal of a task view. -->
-    <integer name="recents_animate_task_view_remove_duration">250</integer>
+    <integer name="recents_animate_task_view_remove_duration">450</integer>
 
     <!-- The animation duration for scrolling the stack to a particular item. -->
     <integer name="recents_animate_task_stack_scroll_duration">225</integer>
@@ -239,8 +246,19 @@
     <!-- Doze: should the pickup sensor be used as a pulse signal? -->
     <bool name="doze_pulse_on_pick_up">false</bool>
 
+    <bool name="config_showSdcardAbsentIndicator">false</bool>
+    <bool name="config_showWifiIndicatorWhenEnabled">false</bool>
+    <bool name="config_showGpsIndicator">false</bool>
+    <bool name="config_showTogglesLayout">false</bool>
+    <bool name="config_showBrightnessToggles">false</bool>
+    <bool name="config_showHotSpotToggles">false</bool>
+    <bool name="config_showSyncToggles">false</bool>
+    <bool name="config_showGpsToggles">false</bool>
     <!-- Doze: check proximity sensor before pulsing? -->
     <bool name="doze_proximity_check_before_pulse">true</bool>
+
+    <!-- Doze: check proximity sensor before pulsing from intent? -->
+    <bool name="doze_proximity_check_before_pulse_intent">false</bool>
 
     <!-- Doze: should notifications be used as a pulse signal? -->
     <bool name="doze_pulse_on_notifications">true</bool>
@@ -263,11 +281,17 @@
     <!-- Doze: pulse parameter - how long does it take to fade in after a pickup? -->
     <integer name="doze_pulse_duration_in_pickup">300</integer>
 
+    <!-- Doze: pulse parameter - how long does it take to fade in after an intent? -->
+    <integer name="doze_pulse_duration_in_intent">300</integer>
+
     <!-- Doze: pulse parameter - delay to wait for the screen to wake up -->
     <integer name="doze_pulse_delay_in">200</integer>
 
     <!-- Doze: pulse parameter - delay to wait for the screen to wake up after a pickup -->
     <integer name="doze_pulse_delay_in_pickup">200</integer>
+
+    <!-- Doze: pulse parameter - delay to wait for the screen to wake up after an intent -->
+    <integer name="doze_pulse_delay_in_intent">200</integer>
 
     <!-- Doze: pulse parameter - once faded in, how long does it stay visible? -->
     <integer name="doze_pulse_duration_visible">3000</integer>
@@ -293,6 +317,10 @@
     <!-- Maximum number of total conditions to display in the zen mode selection panel -->
     <integer name="zen_mode_max_conditions">5</integer>
 
+    <!-- Zen toast visibility duration -->
+    <integer name="zen_toast_visible_duration">500</integer>
+    <!-- Whether to enable data switch or not -->
+    <bool name="config_enableDataSwitch">false</bool>
     <!-- Enable the default volume dialog -->
     <bool name="enable_volume_ui">true</bool>
 </resources>

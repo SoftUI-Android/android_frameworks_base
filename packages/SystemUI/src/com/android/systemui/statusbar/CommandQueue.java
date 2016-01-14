@@ -57,7 +57,7 @@ public class CommandQueue extends IStatusBar.Stub {
     private static final int MSG_NOTIFICATION_LIGHT_OFF     = 16 << MSG_SHIFT;
     private static final int MSG_NOTIFICATION_LIGHT_PULSE   = 17 << MSG_SHIFT;
     private static final int MSG_SHOW_SCREEN_PIN_REQUEST    = 18 << MSG_SHIFT;
-    private static final int MSG_HIDE_HEADS_UP              = 19 << MSG_SHIFT;
+    private static final int MSG_TOGGLE_SCREENSHOT          = 19 << MSG_SHIFT;
 
     public static final int FLAG_EXCLUDE_NONE = 0;
     public static final int FLAG_EXCLUDE_SEARCH_PANEL = 1 << 0;
@@ -71,6 +71,7 @@ public class CommandQueue extends IStatusBar.Stub {
     private StatusBarIconList mList;
     private Callbacks mCallbacks;
     private Handler mHandler = new H();
+    private boolean mPaused = false;
 
     /**
      * These methods are called back on the main thread.
@@ -99,8 +100,8 @@ public class CommandQueue extends IStatusBar.Stub {
         public void buzzBeepBlinked();
         public void notificationLightOff();
         public void notificationLightPulse(int argb, int onMillis, int offMillis);
-        public void scheduleHeadsUpClose();
         public void showScreenPinningRequest();
+        public void toggleScreenshot();
     }
 
     public CommandQueue(Callbacks callbacks, StatusBarIconList list) {
@@ -242,21 +243,33 @@ public class CommandQueue extends IStatusBar.Stub {
         }
     }
 
-    public void scheduleHeadsUpClose() {
-        synchronized (mList) {
-            mHandler.removeMessages(MSG_HIDE_HEADS_UP);
-            mHandler.sendEmptyMessage(MSG_HIDE_HEADS_UP);
-        }
-    }
-
     public void showScreenPinningRequest() {
         synchronized (mList) {
             mHandler.sendEmptyMessage(MSG_SHOW_SCREEN_PIN_REQUEST);
         }
     }
 
+    public void toggleScreenshot() {
+        synchronized (mList) {
+            mHandler.removeMessages(MSG_TOGGLE_SCREENSHOT);
+            mHandler.obtainMessage(MSG_TOGGLE_SCREENSHOT, 0, 0, null).sendToTarget();
+        }
+    }
+
+    public void pause() {
+        mPaused = true;
+    }
+
+    public void resume() {
+        mPaused = false;
+    }
+
     private final class H extends Handler {
         public void handleMessage(Message msg) {
+            if (mPaused) {
+                this.sendMessageAtFrontOfQueue(Message.obtain(msg));
+                return;
+            }
             final int what = msg.what & MSG_MASK;
             switch (what) {
                 case MSG_ICON: {
@@ -334,11 +347,11 @@ public class CommandQueue extends IStatusBar.Stub {
                 case MSG_NOTIFICATION_LIGHT_PULSE:
                     mCallbacks.notificationLightPulse((Integer) msg.obj, msg.arg1, msg.arg2);
                     break;
-                case MSG_HIDE_HEADS_UP:
-                    mCallbacks.scheduleHeadsUpClose();
-                    break;
                 case MSG_SHOW_SCREEN_PIN_REQUEST:
                     mCallbacks.showScreenPinningRequest();
+                    break;
+                case MSG_TOGGLE_SCREENSHOT:
+                    mCallbacks.toggleScreenshot();
                     break;
             }
         }

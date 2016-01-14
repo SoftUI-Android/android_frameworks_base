@@ -160,6 +160,14 @@ public class NotificationData {
         return mEntries.get(key);
     }
 
+    public Entry get(int i) {
+        return mEntries.valueAt(i);
+    }
+
+    public RankingMap getRankingMap() {
+        return mRankingMap;
+    }
+
     public void add(Entry entry, RankingMap ranking) {
         mEntries.put(entry.notification.getKey(), entry);
         updateRankingAndSort(ranking);
@@ -258,6 +266,18 @@ public class NotificationData {
     }
 
     /**
+     * Return whether there are any visible notifications (i.e. without an error).
+     */
+    public boolean hasActiveVisibleNotifications() {
+        for (Entry e : mSortedAndFiltered) {
+            if (e.expanded != null) { // the view successfully inflated
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Return whether there are any clearable notifications (that aren't errors).
      */
     public boolean hasActiveClearableNotifications() {
@@ -269,6 +289,14 @@ public class NotificationData {
             }
         }
         return false;
+    }
+
+    public void clear() {
+        mEntries.clear();
+    }
+
+    public int size() {
+        return mEntries.size();
     }
 
     // Q: What kinds of notifications should show during setup?
